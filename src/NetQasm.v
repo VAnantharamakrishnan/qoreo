@@ -56,6 +56,7 @@ Definition render_unitary (u : unitary) : string :=
   | Y => "Y"
   | Z => "Z"
   | CNOT => "CNOT"
+  | CS => "CS"
   | SGATE => "SGATE"
   | Sdag => "Sdag"
   | TGATE => "TGATE"
