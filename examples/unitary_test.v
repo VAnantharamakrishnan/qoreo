@@ -49,18 +49,69 @@ Module UnitaryTest.
 
     ret r.
 
-  Definition choreo : Choreography.t :=
+      Definition ct_test (Alice : Actor.t) : Qoreo Var.t :=
+    do control ← Alice [- New (Bit true) -] ;;
+    do target  ← Alice [- Unitary H (New (Bit false)) -] ;;
+
+    do (control, target) ←
+      Alice [-- Unitary CT (Pair control target) -] ;;
+
+    do (control, target) ←
+      Alice [-- Unitary CTdag (Pair control target) -] ;;
+
+    do target ← Alice [- Unitary H target -] ;;
+    do r      ← Alice [- Meas target -] ;;
+
+    ret r.
+
+
+  Definition csdag_test (Alice : Actor.t) : Qoreo Var.t :=
+    do control ← Alice [- New (Bit true) -] ;;
+    do target  ← Alice [- Unitary H (New (Bit false)) -] ;;
+
+    do (control, target) ←
+      Alice [-- Unitary CS (Pair control target) -] ;;
+
+    do (control, target) ←
+      Alice [-- Unitary CSdag (Pair control target) -] ;;
+
+    do target ← Alice [- Unitary H target -] ;;
+    do r      ← Alice [- Meas target -] ;;
+
+    ret r.
+
+
+  Definition ctdag_test (Alice : Actor.t) : Qoreo Var.t :=
+    do control ← Alice [- New (Bit true) -] ;;
+    do target  ← Alice [- Unitary H (New (Bit false)) -] ;;
+
+    do (control, target) ←
+      Alice [-- Unitary CTdag (Pair control target) -] ;;
+
+    do (control, target) ←
+      Alice [-- Unitary CT (Pair control target) -] ;;
+
+    do target ← Alice [- Unitary H target -] ;;
+    do r      ← Alice [- Meas target -] ;;
+
+    ret r.
+
+   Definition choreo : Choreography.t :=
     mk (
-      do t_result  ← tdag_test "alice" ;;
-      do s_result  ← sdag_test "alice" ;;
-      do cs_result ← cs_test "alice" ;;
+      do t_result     ← tdag_test "alice" ;;
+      do s_result     ← sdag_test "alice" ;;
+      do cs_result    ← cs_test "alice" ;;
+      do ct_result    ← ct_test "alice" ;;
+      do csdag_result ← csdag_test "alice" ;;
+      do ctdag_result ← ctdag_test "alice" ;;
 
       "alice" [- Pair
-                    (Pair (Var t_result) (Var s_result))
-                    (Var cs_result)
+                    (Pair
+                      (Pair (Var t_result) (Var s_result))
+                      (Pair (Var cs_result) (Var ct_result)))
+                    (Pair (Var csdag_result) (Var ctdag_result))
               -]
     ).
-
 
   Definition parties : list Actor.t :=
     ["alice"].

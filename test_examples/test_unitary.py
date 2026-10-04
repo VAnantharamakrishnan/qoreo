@@ -1,66 +1,59 @@
 import sys
-import tempfile
+import os
+import threading
+import time
+import traceback
 
-sys.path.insert(0, "generated/unitary_test")
+import netsquid as ns
 
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PYTHON_DIR = os.path.join(ROOT, "python")
+GENERATED_DIR = os.path.join(ROOT, "generated", "unitary_test")
+
+sys.path.insert(0, PYTHON_DIR)
+sys.path.insert(0, GENERATED_DIR)
+
+import qoreo_netsquid_runtime as qr
 from app_alice import main as alice_main
-from netqasm.runtime.application import Application, ApplicationInstance, Program
-from netqasm.runtime.interface.config import default_network_config
-from netqasm.sdk.config import LogConfig
-from squidasm.run.multithread.runtime_mgr import SquidAsmRuntimeManager
-
-
 NUM_RUNS = 10
 
 
 def run_once():
-    network_cfg = default_network_config(["alice"])
+    ns.sim_reset()
+    network = qr.QoreoNetwork(["alice"])
+    qr.set_network(network)
 
-    mgr = SquidAsmRuntimeManager()
-    mgr.set_network(network_cfg)
-    mgr.start_backend()
+    results = {}
 
-    prog_alice = Program(
-        party="alice",
-        entry=alice_main,
-        args=["app_config"],
-        results=[],
+    def run_party(party, main):
+        results[party] = main()
+
+    alice_thread = threading.Thread(
+        target=run_party,
+        args=("alice", alice_main),
     )
 
-    app = Application(
-        programs=[prog_alice],
-        metadata=None,
-    )
+    alice_thread.start()
 
-    with tempfile.TemporaryDirectory() as log_dir:
-        log_cfg = LogConfig(
-            track_lines=False,
-            log_subroutines_dir=log_dir,
-            comm_log_dir=log_dir,
-        )
+    while alice_thread.is_alive():
+        ns.sim_run()
+        time.sleep(0.001)
 
-        app_instance = ApplicationInstance(
-            app=app,
-            program_inputs={"alice": {}},
-            network=None,
-            party_alloc={"alice": "alice"},
-            logging_cfg=log_cfg,
-        )
+    alice_thread.join(timeout=1)
+    #bob_thread.join(timeout=1)
 
-        results = mgr.run_app(app_instance)
+    return results["alice"]
 
-    mgr.stop_backend()
-
-    return results
 
 
 def main():
-    expected = ((0, 0), 1)
+    expected = (((0, 0), (1, 0)), (0, 0))
 
     for run_index in range(NUM_RUNS):
         results = run_once()
 
-        actual = results["app_alice"]
+        actual = results
 
        
         assert actual == expected
@@ -69,6 +62,9 @@ def main():
     print("Tdag: WORKS")
     print("Sdag: WORKS")
     print("CS:   WORKS")
+    print("CT:   WORKS")
+    print("CSdag: WORKS")
+    print("CTdag: WORKS")
 
 
 if __name__ == "__main__":

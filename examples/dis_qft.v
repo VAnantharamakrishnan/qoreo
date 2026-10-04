@@ -9,9 +9,8 @@ Open Scope string_scope.
 Open Scope example_scope.
 
 Module DQFT.
-  (* TO DO: Update the text here *)
-  (* Returns ((alice_bit, alice_recv), (bob_basis, bob_result)).
-     When bob_result = 1 the round is conclusive: alice_bit = NOT bob_basis. *)
+  (* Distributed QFT example taken from: https://arxiv.org/pdf/2606.18494 *)
+  
   (*Definition dqft (Alice Bob : Actor.t) : Qoreo (Var.t * (Var.t * Var.t)) := *)
   Definition dqft (Alice Bob : Actor.t) : Qoreo unit :=
   (* I used 101 as the input here. TO DO: Automate this? *)
