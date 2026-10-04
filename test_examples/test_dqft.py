@@ -1,72 +1,70 @@
 import sys
-import tempfile
+import os
+import threading
+import time
+import traceback
 
-sys.path.insert(0, "generated/dqft")
+import netsquid as ns
 
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PYTHON_DIR = os.path.join(ROOT, "python")
+GENERATED_DIR = os.path.join(ROOT, "generated", "dqft")
+
+sys.path.insert(0, PYTHON_DIR)
+sys.path.insert(0, GENERATED_DIR)
+
+import qoreo_netsquid_runtime as qr
 from app_alice import main as alice_main
 from app_bob import main as bob_main
-from netqasm.runtime.application import Application, ApplicationInstance, Program
-from netqasm.runtime.interface.config import default_network_config
-from netqasm.sdk.config import LogConfig
-from squidasm.run.multithread.runtime_mgr import SquidAsmRuntimeManager
 
-#NUM_RUNS = 5
-
-
-#def flatten_rounds(packed):
-#    """Convert (((r1,k1),(r2,k2)),(r3,k3)) into [(r1,k1),(r2,k2),(r3,k3)]."""
-#    (pair12, pair3) = packed
-#    (pair1, pair2) = pair12
-#    return [pair1, pair2, pair3]
-
-
-#def extract_key(packed):
-#    """Return the key bits from conclusive rounds (those where the result bit is 1)."""
-#    return [int(key_bit) for result, key_bit in flatten_rounds(packed) if result == 1]
-
-
+# SquidASM uses threads on its own backend. In our NetQASM code, when we called
+# app = Application(programs=[prog_alice, prog_bob], metadata=None) for example,
+# app_alice and app_bob ran on separate threads.
+# NetSquid doesn't intrinsically have that behavior so we're writing that ourselves.
 def run_once():
-    network_cfg = default_network_config(["alice", "bob"])
-    mgr = SquidAsmRuntimeManager()
-    mgr.set_network(network_cfg)
-    mgr.start_backend()
+    ns.sim_reset()
+    network = qr.QoreoNetwork(["alice", "bob"])
+    qr.set_network(network)
 
-    prog_alice = Program(party="alice", entry=alice_main, args=["app_config"], results=[])
-    prog_bob = Program(party="bob", entry=bob_main, args=["app_config"], results=[])
-    #Find out what Application takes and can return
-    app = Application(programs=[prog_alice, prog_bob], metadata=None)
+    results = {}
 
-    with tempfile.TemporaryDirectory() as log_dir:
-        log_cfg = LogConfig(
-            track_lines=False,
-            log_subroutines_dir=log_dir,
-            comm_log_dir=log_dir,
-        )
-        app_instance = ApplicationInstance(
-            app=app,
-            program_inputs={"alice": {}, "bob": {}},
-            network=None,
-            party_alloc={"alice": "alice", "bob": "bob"},
-            logging_cfg=log_cfg,
-        )
-        results = mgr.run_app(app_instance)
+    def run_party(party, main):
+        results[party] = main()
 
-    mgr.stop_backend()
-    return results
+    alice_thread = threading.Thread(
+        target=run_party,
+        args=("alice", alice_main),
+    )
+    bob_thread = threading.Thread(
+        target=run_party,
+        args=("bob", bob_main),
+    )
 
-## TO DO: EDIT THIS LOGIC HERE
-def main():
-    #for run_index in range(NUM_RUNS):
-    results = run_once()
-    alice_key = results["app_alice"]
-    bob_key = results["app_bob"]
+    alice_thread.start()
+    bob_thread.start()
 
-        #assert alice_key == bob_key, (
-        #    f"Run {run_index + 1}: key mismatch! alice={alice_key} bob={bob_key}"
-        #)
-    print(f"Alice's Qubit: key = {alice_key}")
-    print(f"Bob's Qubits: key = {bob_key}")
+    while alice_thread.is_alive() or bob_thread.is_alive():
+        ns.sim_run()
+        time.sleep(0.001)
+
+    alice_thread.join(timeout=1)
+    bob_thread.join(timeout=1)
+
+    return results["alice"], results["bob"]
 
 
 if __name__ == "__main__":
-    main()
+    shots = 1000
+    counts = {}
+    # We do this to count measurement results. We could just do alice_result, bob_result = run_once() if we don't want to run it multiple times
+    for _ in range(shots):
+        alice_result, bob_result = run_once()
+
+        result = (alice_result, bob_result)
+        counts[result] = counts.get(result, 0) + 1
+
+    print("\nMEASUREMENT RESULTS:")
+    for result, count in sorted(counts.items()):
+        alice, (bob1, bob2) = result
+        print(f"{alice}{bob1}{bob2}: {count}")

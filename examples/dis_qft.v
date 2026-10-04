@@ -64,7 +64,7 @@ Module DQFT.
   do (a1, q2) ←
     Bob [-- Unitary CNOT (Pair a1 q2) -] ;;*)
   do (a1, q2) ←
-    Bob [-- Unitary CS (Pair a1 q2) -] ;;
+    Bob [-- Unitary CT (Pair a1 q2) -] ;;
   (*H on a1*)
   do a1 ← Bob [- Unitary H a1 -] ;;
   (*Measure a1, send measurement result, apply correction*)
@@ -88,6 +88,7 @@ Module DQFT.
   do q0 ← Alice [- Meas q0 -] ;;
   do q1 ← Bob [- Meas q1 -] ;;
   do q2 ← Bob [- Meas q2 -] ;;
+  do q3 ← Bob [- Pair q1 q2-];;
   ret tt.
   (*ret (q0, (q1, q2)). *)
 
