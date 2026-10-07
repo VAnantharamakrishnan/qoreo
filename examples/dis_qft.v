@@ -12,19 +12,15 @@ Module DQFT.
   (* Distributed QFT example taken from: https://arxiv.org/pdf/2606.18494 *)
   
   (*Definition dqft (Alice Bob : Actor.t) : Qoreo (Var.t * (Var.t * Var.t)) := *)
-  Definition dqft (Alice Bob : Actor.t) : Qoreo unit :=
+  (*Definition dqft (Alice Bob : Actor.t) : Qoreo unit := *)
+  Definition dqft (Alice Bob : Actor.t) (b0 b1 b2 : bool) : Qoreo unit :=
   (* I used 101 as the input here. TO DO: Automate this? *)
-  do q0 ← Alice [- New (Bit true) -] ;;
-  do q1 ← Bob   [- New (Bit false) -] ;;
-  do q2 ← Bob   [- New (Bit true) -] ;;
-  (*do coin_a ← Alice [- Unitary H (New (Bit false)) -] ;;
-  *do a      ← Alice [- Meas coin_a -] ;;
-*)
+  do q0 ← Alice [- New (Bit b0) -] ;;
+  do q1 ← Bob   [- New (Bit b1) -] ;;
+  do q2 ← Bob   [- New (Bit b2) -] ;;
+
   do q0 ← Alice [- Unitary H q0 -] ;;
-  (* Alice prepares her transmission qubit: |0⟩ if a=0, |+⟩ if a=1. *)
-  (*do q      ← Alice [- New (Bit false) -] ;;
-  *do q      ← Alice [- If a (Unitary H q) q -] ;;
-*)
+
   (* This implementation only requires ONE EPR pair since we're using ancillas *)
   do (a0, a1) ← get_entangled_pair Alice Bob ;;
   (* Start Process*)
@@ -37,31 +33,9 @@ Module DQFT.
                  (Unitary X a1)
                  a1 -] ;;
  
-  (*This is the earlier implementation using T and CNOT for CS(a1,q1) : REWRITE THIS LATER WHEN CP is added *)
-  (*do a1 ← Bob [- Unitary T a1 -] ;;
-  do q1 ← Bob [- Unitary T q1 -] ;;
-
-  do (a1, q1) ←
-    Bob [-- Unitary CNOT (Pair a1 q1) -] ;;
-
-  do q1 ← Bob [- Unitary Tdag q1 -] ;;
-
-  do (a1, q1) ←
-    Bob [-- Unitary CNOT (Pair a1 q1) -] ;;*)
-  (*NEW CS GATE ADDED HERE*)
   do (a1, q1) ←
     Bob [-- Unitary CS (Pair a1 q1) -] ;;
-   (*This isn't correct. I just wrote another CS here when it should be CT. TO DO: Find an approximate representation for CT*)
-  (*do a1 ← Bob [- Unitary T a1 -] ;;
-  do q2 ← Bob [- Unitary T q2 -] ;;
-
-  do (a1, q2) ←
-    Bob [-- Unitary CNOT (Pair a1 q2) -] ;;
-
-  do q2 ← Bob [- Unitary Tdag q2 -] ;;
-
-  do (a1, q2) ←
-    Bob [-- Unitary CNOT (Pair a1 q2) -] ;;*)
+ 
   do (a1, q2) ←
     Bob [-- Unitary CT (Pair a1 q2) -] ;;
   (*H on a1*)
@@ -81,9 +55,6 @@ Module DQFT.
   (*H on q2*)
   do q2 ← Bob [- Unitary H q2 -] ;;
 
-  (* TO DO: I'm unsure if ret expects a classical or quantum result. I suspect that the result needs 
-  * to be classical
-  *)
   do q0 ← Alice [- Meas q0 -] ;;
   do q1 ← Bob [- Meas q1 -] ;;
   do q2 ← Bob [- Meas q2 -] ;;
@@ -91,8 +62,6 @@ Module DQFT.
   ret tt.
   (*ret (q0, (q1, q2)). *)
 
-  (* Instead of returning 3 variables, we could just return Unit *)
-  (*If you're using Qoreo Unit, ret tt *)
   
  
 
@@ -100,7 +69,7 @@ Module DQFT.
   (* Not sure if correct, but I modified the b92 case to just run DQFT once *)
   Definition choreo : Choreography.t :=
   mk (
-    do result ← dqft "alice" "bob" ;;
+    do result ← dqft "alice" "bob" true false true ;;
     ret result
   ).
 
