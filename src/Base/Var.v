@@ -52,6 +52,7 @@ Create HintDb var_db.
   #[global] Existing Instance Map.Proofs.concatProper.
   #[global] Existing Instance Map.Proofs.domainProper.
   #[global] Existing Instance Map.FSetProofs.setminusProper.
+  #[global] Existing Instance Map.Proofs.PartitionListProper.
 
   #[global] Hint Rewrite Map.Proofs.concat_find : var_db.
   #[global] Hint Rewrite Map.Proofs.concat_in : var_db.

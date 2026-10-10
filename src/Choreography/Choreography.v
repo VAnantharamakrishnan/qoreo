@@ -571,6 +571,10 @@ Proof.
   all: (symmetry; auto).
 Qed.
 
+Notation "T '!' A" := (ChorEnv.find A T)
+  (no associativity, at level 60).
+Import List.ListNotations.
+
 (** Typing Relation *)
 
 Inductive WellTyped :
@@ -586,57 +590,84 @@ Inductive WellTyped :
     WellTyped (ChorEnv.remove B y (ChorEnv.remove A x G))
       (ChorEnv.add B y Expr.QUBIT (ChorEnv.add A x Expr.QUBIT D)) T C ->
 
-    ~ Var.Map.In x (ChorEnv.find A D) ->
-    ~ Var.Map.In y (ChorEnv.find B D) ->
+    ~ Var.Map.In x (D!A) ->
+    ~ Var.Map.In y (D!B) ->
 
     WellTyped G D T (Choreography.Do (Insn.EPR A x B y) C)
 
 | Send : forall DeltaA1 DeltaA2 ThetaA1 ThetaA2 G D T A e tau B y C,
     A <> B ->
-    Expr.WellTyped (ChorEnv.find A G) DeltaA1 ThetaA1 e (Expr.BANG tau) ->
+    Expr.WellTyped (G!A) DeltaA1 ThetaA1 e (Expr.BANG tau) ->
     WellTyped (ChorEnv.add B y tau G) (Actor.Map.add A DeltaA2 D) (Actor.Map.add A ThetaA2 T) C ->
 
-    Var.Map.Partition (ChorEnv.find A D) DeltaA1 DeltaA2 ->
-    Var.Map.Partition (ChorEnv.find A T) ThetaA1 ThetaA2 ->
+    Var.Map.Partition (D!A) DeltaA1 DeltaA2 ->
+    Var.Map.Partition (T!A) ThetaA1 ThetaA2 ->
 
     WellTyped G D T (Choreography.Do (Insn.Send A e B y) C)
 
 | LetBang : forall DeltaA1 DeltaA2 ThetaA1 ThetaA2 G D T A x e tau C,
 
-    Expr.WellTyped (ChorEnv.find A G) DeltaA1 ThetaA1 e (Expr.BANG tau) ->
+    Expr.WellTyped (G!A) DeltaA1 ThetaA1 e (Expr.BANG tau) ->
     WellTyped (ChorEnv.add A x tau G) (Actor.Map.add A DeltaA2 D) (Actor.Map.add A ThetaA2 T) C ->
 
-    Var.Map.Partition (ChorEnv.find A D) DeltaA1 DeltaA2 ->
-    Var.Map.Partition (ChorEnv.find A T) ThetaA1 ThetaA2 ->
+    Var.Map.Partition (D!A) DeltaA1 DeltaA2 ->
+    Var.Map.Partition (T!A) ThetaA1 ThetaA2 ->
 
     WellTyped G D T (Choreography.Do (Insn.LetBang A x e) C)
 
 | LetIn : forall DeltaA1 DeltaA2 ThetaA1 ThetaA2 G D T A x e tau C,
 
-    Expr.WellTyped (ChorEnv.find A G) DeltaA1 ThetaA1 e tau ->
+    Expr.WellTyped (G!A) DeltaA1 ThetaA1 e tau ->
     WellTyped (ChorEnv.remove A x G) (Actor.Map.add A (Var.Map.add x tau DeltaA2) D)
       (Actor.Map.add A ThetaA2 T) C ->
 
-    Var.Map.Partition (ChorEnv.find A D) DeltaA1 DeltaA2 ->
-    Var.Map.Partition (ChorEnv.find A T) ThetaA1 ThetaA2 ->
+    Var.Map.Partition (D!A) DeltaA1 DeltaA2 ->
+    Var.Map.Partition (T!A) ThetaA1 ThetaA2 ->
     ~ Var.Map.In x DeltaA2 ->
     WellTyped G D T (Choreography.Do (Insn.Let A x e) C)
 
 | LetPair: forall DeltaA1 DeltaA2 ThetaA1 ThetaA2 G D T A x1 x2 tau1 tau2 e C,
 
-    Expr.WellTyped (ChorEnv.find A G) DeltaA1 ThetaA1 e (Expr.Tensor tau1 tau2) ->
+    Expr.WellTyped (G!A) DeltaA1 ThetaA1 e (Expr.Tensor tau1 tau2) ->
     WellTyped (ChorEnv.remove A x1 (ChorEnv.remove A x2 G))
       (Actor.Map.add A (Var.Map.add x1 tau1 (Var.Map.add x2 tau2 DeltaA2)) D)
       (Actor.Map.add A ThetaA2 T) C ->
 
-    Var.Map.Partition (ChorEnv.find A D) DeltaA1 DeltaA2 ->
-    Var.Map.Partition (ChorEnv.find A T) ThetaA1 ThetaA2 ->
+    Var.Map.Partition (D!A) DeltaA1 DeltaA2 ->
+    Var.Map.Partition (T!A) ThetaA1 ThetaA2 ->
     ~ Var.Map.In x1 DeltaA2 -> 
     ~ Var.Map.In x2 DeltaA2 ->
     x1 <> x2 ->
 
     WellTyped G D T (Choreography.Do (Insn.LetPair A x1 x2 e) C)
 
+| If : forall DeltaA ThetaA D' T' D'' T'' G D T A e C1 C2 C',
+
+  Expr.WellTyped (G!A) DeltaA ThetaA e Expr.BIT ->
+
+  (* Γ; D'; T' ⊢ C1 *)
+  (* Γ; D'; T' ⊢ C2 *)
+
+  WellTyped G D' T' C1 ->
+  WellTyped G D' T' C2 ->
+
+  ChorEnv.EmptyExcept
+    (Actor.FSet.union (Choreography.actors C2) (Choreography.actors C1)) 
+    D' ->
+  ChorEnv.EmptyExcept
+    (Actor.FSet.union (Choreography.actors C2) (Choreography.actors C1)) 
+    T' ->
+  
+  (* Γ; D'' ; T'' ⊢ C' *)
+  WellTyped G D'' T'' C' ->
+
+  ChorEnv.PartitionList D [Actor.Map.singleton A DeltaA; D'; D''] ->
+  ChorEnv.PartitionList T [Actor.Map.singleton A ThetaA; T'; T''] ->
+
+  WellTyped G D T (Choreography.If A e C1 C2 C')
+.
+
+(*
 | If : forall DeltaA ThetaA D' T' D'' T'' DeltaA' ThetaA'
               G D T e C1 C2 C' A,
 
@@ -646,8 +677,9 @@ Inductive WellTyped :
   (* Γ; D'; T' ⊢ C1 *)
   (* Γ; D'; T' ⊢ C2 *)
 
-  WellTyped G D' T C1 ->
-  WellTyped G D' T C2 ->
+  WellTyped G D' T' C1 ->
+  WellTyped G D' T' C2 ->
+  (* Note: D' and T' should be empty for all A ∉ actors(C1) ∪ actors(C2) *)
 
   (* Γ; D'' ; T'' ⊢ C' *)
   WellTyped G D'' T'' C' ->
@@ -663,6 +695,13 @@ Inductive WellTyped :
     Var.Map.Partition (ChorEnv.find A0 D)
                       (ChorEnv.find A0 D')
                       (ChorEnv.find A0 D'')) ->
+  
+  (* A0 ∉ actors(C1) ∪ actors(C2) -> D'[A0] == ∅ *)
+  (forall A0,
+    ~ Actor.FSet.In A0 (Choreography.actors C1) ->
+    ~ Actor.FSet.In A0 (Choreography.actors C2) ->
+    Var.Map.Empty (ChorEnv.find A0 D') 
+  ) ->
 
   (* T[A] == Theta ++ T'[A] ++ T''[A0] *)
   Var.Map.Partition (ChorEnv.find A T)
@@ -676,9 +715,15 @@ Inductive WellTyped :
                       (ChorEnv.find A0 T')
                       (ChorEnv.find A0 T'')) ->
  
+  (* A0 ∉ actors(C1) ∪ actors(C2) -> T'[A0] == ∅ *)
+  (forall A0,
+    ~ Actor.FSet.In A0 (Choreography.actors C1) ->
+    ~ Actor.FSet.In A0 (Choreography.actors C2) ->
+    Var.Map.Empty (ChorEnv.find A0 T') 
+  ) ->
 
   WellTyped G D T (Choreography.If A e C1 C2 C')
-.
+  *)
 
 Lemma WellTypedProper' : forall G D T C,
   WellTyped G D T C ->
@@ -744,8 +789,15 @@ Proof.
       try rewrite <- HD;
       try rewrite <- HT;
       eauto;
-      reflexivity.
-
+      try reflexivity.
+    + 
+      eapply ChorEnv.PartitionListProper; eauto.
+      symmetry; auto.
+      repeat (constructor; try reflexivity).
+    + 
+      eapply ChorEnv.PartitionListProper; eauto.
+      symmetry; auto.
+      repeat (constructor; try reflexivity).
 Qed.
 
 Global Instance WellTypedProper :
