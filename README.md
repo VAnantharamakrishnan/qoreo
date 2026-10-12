@@ -64,7 +64,7 @@ The repository is organized in 4 main directories.
 
     - `src/NetQasm.v` - Render Qoreo processes as NetQASM strings
 
-* `examples/`
+* `src/examples/`
 
     - `examples/Notation.v` - Introduces a Qoreo construction DSL monad that uses higher-order abstract syntax (HOAS) to construct choreographies in a natural style
 
@@ -77,7 +77,10 @@ The repository is organized in 4 main directories.
 
 * `ocaml/` - A directory that instrments the extracted ocaml code for each examples
 
-* `python/ocaml_netqasm_runtime.py` - Implementation of a simple python runtime library using netqasm.
+* `python/`
+    - `ocaml_netsquid_runtime.py` - Implementation of a simple python runtime library using netsquid. Preferred.
+    - `ocaml_netqasm_runtime.py` - Implementation of a simple python runtime library using netqasm.
+    
 
 
 # Contributing to the repository

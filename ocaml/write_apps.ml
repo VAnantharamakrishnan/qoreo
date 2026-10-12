@@ -55,7 +55,7 @@ module Make (T : EXTRACTED) = struct
     let parent = Filename.dirname out_dir in
     ensure_dir parent;
     ensure_dir out_dir;
-    copy_file "python/qoreo_netqasm_runtime.py"
-      (Filename.concat out_dir "qoreo_netqasm_runtime.py");
+    copy_file "python/qoreo_netsquid_runtime.py"
+      (Filename.concat out_dir "qoreo_netsquid_runtime.py");
     write_apps out_dir apps
 end

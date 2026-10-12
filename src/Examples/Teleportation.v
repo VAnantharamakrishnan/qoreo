@@ -1,7 +1,7 @@
 From Stdlib Require Import String.
 From Qoreo Require Import Base.Config Expr.Expr Expr.Proofs Choreography.Choreography Choreography.Proofs Network.Network NetQasm.
 Import Config.Unitary.
-From QoreoExamples Require Import Notation.
+From Qoreo.Examples Require Import Notation.
 From Stdlib Require Import Lia.
 
 

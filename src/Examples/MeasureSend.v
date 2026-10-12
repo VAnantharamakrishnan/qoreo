@@ -5,7 +5,7 @@ Import List.ListNotations.
 
 From Qoreo Require Import Expr.Expr Choreography.Choreography.
 From Qoreo Require Import Network NetQasm.
-From QoreoExamples Require Import OldNotation.
+From Qoreo.Examples Require Import OldNotation.
 Require Extraction.
 
 Import Choreography.

@@ -1,5 +1,4 @@
 -Q src Qoreo
--Q examples QoreoExamples
 
 src/Base/Map.v
 src/Base/Var.v
@@ -29,11 +28,12 @@ src/Network/Network.v
 src/Network/Proofs.v
 
 src/NetQasm.v
-examples/Notation.v
-examples/OldNotation.v
-examples/Teleportation.v
-examples/MeasureSend.v
-examples/b92.v
-examples/Protocols.v
-examples/dis_qft.v
-examples/unitary_test.v
+
+src/Examples/Notation.v
+src/Examples/OldNotation.v
+src/Examples/Teleportation.v
+src/Examples/MeasureSend.v
+src/Examples/B92.v
+src/Examples/Protocols.v
+src/Examples/dis_qft.v
+src/Examples/unitary_test.v
