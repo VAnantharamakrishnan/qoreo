@@ -17,77 +17,41 @@ Once dependencies have been installed, you can build the Rocq proofs using `make
 
 # Structure
 
-The repository is organized in 4 main directories.
+The repository contains the Rocq formalization, extraction/generation tools, Python runtimes, and example simulations:
 
-* `src` - Rocq implementation of Qoreo
-    - `src/Base.v` - Definition of common structures used in the formaliztion
-        - `FMap` - finite maps
-        - `Var` - variables represented as natural numbers
-        - `unitary` - data structure of unitary gates
-        - `Config` - quantum states represented as QuantumLib density matrices
-        - `Actor` - actors in a network, represented as strings
-        - `ChorEnv` - specialized finite maps from pairs of actors and variable names.
+```text
+.
+├── src/
+│   ├── Base/             # Shared structures: variables, actors, configs, maps
+│   ├── Expr/             # Local quantum expression language and metatheory
+│   ├── Choreography/     # Choreographies, semantics, proofs, and notation
+│   ├── Network/          # Process/network semantics and endpoint projection
+│   ├── Examples/         # Example choreographies
+│   ├── NetQasm.v         # Rendering projected processes as Python applications
+│   ├── NewChoreography.v # Experimental choreography representation
+│   └── expr/             # Earlier expression-language sources
+├── ocaml/                # Drivers that write generated party applications
+├── python/               # NetQASM and NetSquid runtime implementations
+├── test_examples/        # B92, DQFT, and unitary simulation tests
+├── Makefile              # Proof and example-generation targets
+└── _CoqProject           # Rocq logical paths and source-file list
+```
 
-    - `src/Expr.v` - Definition of the local quantum expression language
-        - `Expr.t` - Qoreo AST
-        - `Expr.step` - small-step operational semantics
-        - `Expr.typ` - Qoreo types
-        - `Expr.WellTyped` - typing relation
-        - `wt_subst`, `wt_subst_bang` - substitution lemmas for linear and non-linear variables respectively
-        - `WellTyped_preservation` - preservation of the typing relation with respect to the step relation
-        - `WellScoped_preservation` - preservation of the configuration well-scopedness relation with respect to the step relation
-        - `preservation`- conjunction of the previous two lemmas
-        - 'progress' - well-typed terms are either values or can take a step
-        - `safety` - top-level type safety theorem
+The main Rocq components are:
 
-    - `src/Choreography.v` - Definition of the choreographic language
-        - `Insn.t`, `Expr.t` - Choreographic instructions and choreographies, respectively
-        - `step` - small-step operational semantics
-        - `WellTyped` - typing relation
-        - `wt_subst_lin`, `wt_subst_bang`: substitution lemmas for linear and non-linear variables respectively
-        - `WellTyped_preservation`: preservation of the typing relation with respect to the step relation
-        - `WellScoped_preservation`: preservation of the configuration well-scopedness relation with respect to the step relation
-        - `preservation`: conjunction of the previous two lemmas
-        - 'progress': well-typed choreographies are either values or can take a step
-        - `safety`: top-level type safety theorem
+* `src/Base/` defines common data types and finite maps, including `Var`, `Actor`, `Config`, and `ChorEnv`.
+* `src/Expr/` defines the local quantum expression language, its typing and operational semantics, and related metatheory.
+* `src/Choreography/` defines choreographic programs and proves their typing, operational, and safety properties.
+* `src/Network/` defines projected processes and networks, endpoint projection, and its correctness properties.
+* `src/Examples/` contains B92, measurement/send, teleportation, protocols, distributed QFT, and unitary-gate examples.
+* `src/NetQasm.v` renders projected processes as Python source.
 
-
-    - `src/Network.v`: Definition of process language and endpoint projection
-        - `Insn.t`, `Process.t`, `Network.t` - Definiton of choreographic instructions, processes, and networks respectively
-        - `Process.step`, `Network.step` - small-step operational semantics
-        - `epp` - Definition of endpoint projection as a function from choreographies and an actor name to a process.
-        - `EPP` - Relational definition of endpoint projection
-        - `EPP_N` - Relational definition of when a choreography is projected onto an entire network
-        - `soundness` - Soundness of EPP; if a choreography can take a step, then so can the projected choreography
-        - `completeness` - Completeness of EPP; if a projected choreography can take a step, then so can the unprojected choreography
-        - `safety` - Well-typed choreographies project to safe and deadlock-free networks
-
-    - `src/NetQasm.v` - Render Qoreo processes as NetQASM strings
-
-* `src/examples/`
-
-    - `examples/Notation.v` - Introduces a Qoreo construction DSL monad that uses higher-order abstract syntax (HOAS) to construct choreographies in a natural style
-
-    - `examples/MeasureSend.v` - trivial examples that measures a qubit and sends it on a channel
-    - `examples/Teleportation.v` - choreographic implementation of quantum teleportation
-    - `examples/Protocols.v` - a variety of protocols including distributed controlled-unitaries and a distributed VQA pass
-    - `examples/b92.v` - implementaiton of B92 quantum key distribution algorithm
-
-        * `test_examples/test_b92.py` - python instrumentation for B91
-
-* `ocaml/` - A directory that instrments the extracted ocaml code for each examples
-
-* `python/`
-    - `ocaml_netsquid_runtime.py` - Implementation of a simple python runtime library using netsquid. Preferred.
-    - `ocaml_netqasm_runtime.py` - Implementation of a simple python runtime library using netqasm.
-    
+The code-generation pipeline is split between `ocaml/write_apps.ml`, the per-example drivers in `ocaml/`, and the runtime modules in `python/`.
 
 
 # Contributing to the repository
 
-To add a new Rocq `.v` file, add it to the `src/` subdirectory and add it to the list of filenames in the `_CoqProject` file.
-
-Qoreo uses the OCaml/Rocq concept of modules to define data structures. The variables in `src/Base.v` are a good example: they are defined in a module `Var`, and the type of such variables is `Var.t`. Other helper functions such as decidable equality of variables are also defined in this module (`Var.eq_dec`). Modules can be nested, e.g. `Var.FSet.t` is the type of finite sets of variables.
+To add a new Rocq `.v` file, place it in the appropriate `src/` subdirectory and add it to `_CoqProject`. Qoreo uses Rocq modules to organize data structures; for example, variables and their operations are defined under `Var` in `src/Base/Var.v`.
 
 # Extracting to NetQASM
 
@@ -108,65 +72,48 @@ SquidASM depends on NetSquid, which requires special credentials to install. You
 
 ## Extracting the examples
 
-The `examples` directory includes these extractable NetQASM examples:
+The `src/Examples/` directory contains the extractable examples:
 
-* `examples/MeasureSend.v` - Alice creates a qubit, applies `H`, measures it, and sends the resulting classical bit to Bob
-* `examples/Teleportation.v` - a teleportation choreography
-* `examples/b92.v` - a B92 quantum key distribution choreography
+* `MeasureSend.v` - Alice creates a qubit, applies `H`, measures it, and sends the resulting classical bit to Bob
+* `Teleportation.v` - a teleportation choreography
+* `B92.v` - a B92 quantum key distribution choreography
+* `dis_qft.v` - a distributed quantum Fourier transform example
+* `unitary_test.v` - a unitary-gate example
 
-To run endpoint projection and generate Python applications for the simple
-measurement example:
+Generate applications with the corresponding Make targets:
 
 ```
 make generate-measure-send-py
-```
-
-For teleportation:
-
-```
 make generate-teleportation-py
-```
-
-For B92:
-
-```
 make generate-b92-py
+make generate-dqft-py
+make generate-unitary-py
 ```
 
-Each target builds the corresponding Rocq example, extracts rendered application data into `extracted/`, compiles the OCaml generator, and writes the final Python application directory under `generated/<example>/`. For example, `make generate-b92-py` writes files such as:
+Each target builds the corresponding Rocq example, extracts rendered application data into `extracted/`, compiles the OCaml generator, and writes party applications under `generated/<example>/`. The generator also copies the runtime module it uses into that output directory.
 
-```
-generated/b92/app_alice.py
-generated/b92/app_bob.py
-generated/b92/qoreo_netqasm_runtime.py
-```
-
-The generated `app_<party>.py` files are the NetQASM SDK applications for each party. `qoreo_netqasm_runtime.py` is copied into the generated directory so the applications can import the Qoreo runtime wrapper directly.
-
-The compilation pipeline relies on:
+The compilation pipeline uses:
 
 * `src/NetQasm.v` - Renders a `Process` into a string in a NetQASM-like IR
 * `ocaml/write_apps.ml` - An OCaml driver to run the renderer and save the results to .py files
-* `python/qoreo_netqasm_runtime.py` - A Python runtime that wraps the NetQASM API to make it more similar to the Qoreo expression language
+* `python/qoreo_netqasm_runtime.py` and `python/qoreo_netsquid_runtime.py` - Python runtimes for the generated applications and NetSquid simulations
 
-## Running the simulation
+## Running the examples
 
-The repository includes a simulation harness for the B92 example. Generate the B92 applications first:
+The `test_examples/` directory contains simulation tests. B92 uses SquidASM; DQFT and unitary use the Qoreo NetSquid runtime. Generate the applications first:
 
 ```
 make generate-b92-py
+make generate-dqft-py
+make generate-unitary-py
 ```
 
-Then run:
+Run the B92 test with the Python environment containing NetSquid and SquidASM dependencies:
 
 ```
 python test_examples/test_b92.py
 ```
 
-The script starts a SquidASM runtime with Alice and Bob, imports the generated applications from `generated/b92`, runs the protocol several times, and checks that Alice's and Bob's conclusive key bits match. It prints the key extracted from each run.
+The B92 test starts Alice and Bob through SquidASM, runs several protocol rounds, and checks that their conclusive key bits match. The DQFT and unitary tests execute the generated party programs against the Qoreo NetSquid runtime.
 
-`MeasureSend` and `Teleportation` are generated as NetQASM SDK Python applications in the same way. You can run the simulation for these examples by changing to the directory containing the generated application and running:
-
-```
-netqasm simulate
-```
+`MeasureSend` and `Teleportation` generate NetQASM SDK Python applications. Their generated applications can be run with the NetQASM tooling.
