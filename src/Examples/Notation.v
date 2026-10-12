@@ -220,20 +220,20 @@ Ltac right_associate A :=
 
 
 Module ExampleExtraction.
-  Definition render_party (choreo : Choreography.t) (p : Actor.t)
+  Definition render_party (b : Backend) (choreo : Choreography.t) (p : Actor.t)
     : option AppFile.t :=
     match Network.epp p choreo with
     | Some proc =>
-        Some {| AppFile.party := p; AppFile.source := render_app p proc |}
+        Some {| AppFile.party := p; AppFile.source := render_app b p proc |}
     | None => None
     end.
 
-  Fixpoint render_parties (choreo : Choreography.t) (ps : list Actor.t)
+  Fixpoint render_parties b (choreo : Choreography.t) (ps : list Actor.t)
     : option (list AppFile.t) :=
     match ps with
     | [] => Some []
     | p :: ps' =>
-        match render_party choreo p, render_parties choreo ps' with
+        match render_party b choreo p, render_parties b choreo ps' with
         | Some app, Some apps => Some (app :: apps)
         | _, _ => None
         end

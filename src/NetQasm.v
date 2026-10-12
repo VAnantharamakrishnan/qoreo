@@ -182,10 +182,18 @@ Fixpoint last_bound_var (P : Network.Process.t) : option Var.t :=
   | Process.ReceiveIf _ _ _ P' => last_bound_var P'
   end.
 
-Definition render_app (self : Actor.t) (P : Network.Process.t) : string :=
+Inductive Backend := NetSquid | NetQASM.
+
+Definition render_import (b : Backend) :=
+  match b with
+  | NetSquid => "import qoreo_netsquid_runtime as qr"
+  | NetQASM  => "import qoreo_netqasm_runtime as qr"
+  end.
+
+Definition render_app (b : Backend) (self : Actor.t) (P : Network.Process.t) : string :=
   let classicals := classical_peers P in
   let eprs := epr_peers P in
-  "import qoreo_netsquid_runtime as qr" +:+ nl +:+ nl +:+
+  render_import b +:+ nl +:+ nl +:+
   "def main(app_config=None):" +:+ nl +:+
   line 1 ("rt = qr.Runtime(" +:+
             actor_literal self +:+ ", app_config, " +:+

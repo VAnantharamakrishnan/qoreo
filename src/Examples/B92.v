@@ -81,7 +81,7 @@ Module B92.
 
 
   Definition apps : option (list AppFile.t) :=
-    ExampleExtraction.render_parties choreo parties.
+    ExampleExtraction.render_parties NetQASM choreo parties.
 End B92.
 
 Extraction Language OCaml.

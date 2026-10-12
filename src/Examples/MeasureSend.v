@@ -33,7 +33,7 @@ Module MeasureSend.
     [A; B].
 
   Definition apps : option (list AppFile.t) :=
-    ExampleExtraction.render_parties choreo parties.
+    ExampleExtraction.render_parties NetQASM choreo parties.
 End MeasureSend.
 
 Extraction Language OCaml.

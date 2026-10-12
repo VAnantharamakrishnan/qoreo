@@ -118,7 +118,7 @@ Module UnitaryTest.
 
 
   Definition apps : option (list AppFile.t) :=
-    ExampleExtraction.render_parties choreo parties.
+    ExampleExtraction.render_parties NetSquid choreo parties.
 
 End UnitaryTest.
 

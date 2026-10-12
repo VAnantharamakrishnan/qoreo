@@ -1,4 +1,11 @@
-.PHONY: all clean generate-teleportation-py generate-measure-send-py
+PYTHON_GENERATION_TARGETS := \
+	generate-teleportation-py \
+	generate-measure-send-py \
+	generate-b92-py \
+	generate-dqft-py \
+	generate-unitary-py
+
+.PHONY: all clean $(PYTHON_GENERATION_TARGETS)
 
 all: CoqMakefile
 	$(MAKE) -f CoqMakefile
@@ -17,47 +24,36 @@ clean: CoqMakefile
 %: CoqMakefile
 	$(MAKE) -f CoqMakefile $@
 
-generate-teleportation-py: src/Examples/Teleportation.vo ocaml/write_apps.ml ocaml/generate_teleportation.ml python/qoreo_netqasm_runtime.py
-	mkdir -p extracted generated
-	ocamlc -I extracted -c extracted/teleportation_netqasm.mli
-	ocamlc -I extracted -c extracted/teleportation_netqasm.ml
-	ocamlc -I extracted -I ocaml -c ocaml/write_apps.ml
-	ocamlc -I extracted -I ocaml -c ocaml/generate_teleportation.ml
-	ocamlc -I extracted -I ocaml -o extracted/generate_teleportation unix.cma extracted/teleportation_netqasm.cmo ocaml/write_apps.cmo ocaml/generate_teleportation.cmo
-	./extracted/generate_teleportation generated/teleportation
+generate-teleportation-py: EXTRACTED_MODULE = teleportation_netqasm
+generate-teleportation-py: GENERATOR = teleportation
+generate-teleportation-py: OUTPUT_DIR = teleportation
+generate-teleportation-py: src/Examples/Teleportation.vo ocaml/generate_teleportation.ml python/qoreo_netqasm_runtime.py
 
-generate-measure-send-py: src/Examples/MeasureSend.vo ocaml/write_apps.ml ocaml/generate_measure_send.ml python/qoreo_netqasm_runtime.py
-	mkdir -p extracted generated
-	ocamlc -I extracted -c extracted/measure_send_netqasm.mli
-	ocamlc -I extracted -c extracted/measure_send_netqasm.ml
-	ocamlc -I extracted -I ocaml -c ocaml/write_apps.ml
-	ocamlc -I extracted -I ocaml -c ocaml/generate_measure_send.ml
-	ocamlc -I extracted -I ocaml -o extracted/generate_measure_send unix.cma extracted/measure_send_netqasm.cmo ocaml/write_apps.cmo ocaml/generate_measure_send.cmo
-	./extracted/generate_measure_send generated/measure_send
+generate-measure-send-py: EXTRACTED_MODULE = measure_send_netqasm
+generate-measure-send-py: GENERATOR = measure_send
+generate-measure-send-py: OUTPUT_DIR = measure_send
+generate-measure-send-py: src/Examples/MeasureSend.vo ocaml/generate_measure_send.ml python/qoreo_netqasm_runtime.py
 
-generate-b92-py: src/Examples/B92.vo ocaml/write_apps.ml ocaml/generate_b92.ml python/qoreo_netqasm_runtime.py python/qoreo_netsquid_runtime.py
-	mkdir -p extracted generated
-	ocamlc -I extracted -c extracted/b92_netqasm.mli
-	ocamlc -I extracted -c extracted/b92_netqasm.ml
-	ocamlc -I extracted -I ocaml -c ocaml/write_apps.ml
-	ocamlc -I extracted -I ocaml -c ocaml/generate_b92.ml
-	ocamlc -I extracted -I ocaml -o extracted/generate_b92 unix.cma extracted/b92_netqasm.cmo ocaml/write_apps.cmo ocaml/generate_b92.cmo
-	./extracted/generate_b92 generated/b92
+generate-b92-py: EXTRACTED_MODULE = b92_netqasm
+generate-b92-py: GENERATOR = b92
+generate-b92-py: OUTPUT_DIR = b92
+generate-b92-py: src/Examples/B92.vo ocaml/generate_b92.ml python/qoreo_netqasm_runtime.py
 
-generate-dqft-py: src/Examples/dis_qft.vo ocaml/write_apps.ml ocaml/generate_dqft.ml python/qoreo_netsquid_runtime.py
-	mkdir -p extracted generated
-	ocamlc -I extracted -c extracted/dqft_netqasm.mli
-	ocamlc -I extracted -c extracted/dqft_netqasm.ml
-	ocamlc -I extracted -I ocaml -c ocaml/write_apps.ml
-	ocamlc -I extracted -I ocaml -c ocaml/generate_dqft.ml
-	ocamlc -I extracted -I ocaml -o extracted/generate_dqft unix.cma extracted/dqft_netqasm.cmo ocaml/write_apps.cmo ocaml/generate_dqft.cmo
-	./extracted/generate_dqft generated/dqft
+generate-dqft-py: EXTRACTED_MODULE = dqft_netqasm
+generate-dqft-py: GENERATOR = dqft
+generate-dqft-py: OUTPUT_DIR = dqft
+generate-dqft-py: src/Examples/dis_qft.vo ocaml/generate_dqft.ml python/qoreo_netsquid_runtime.py
 
-generate-unitary-py: src/Examples/unitary_test.vo ocaml/write_apps.ml ocaml/generate_unitary.ml python/qoreo_netsquid_runtime.py
+generate-unitary-py: EXTRACTED_MODULE = unitary_test_netqasm
+generate-unitary-py: GENERATOR = unitary
+generate-unitary-py: OUTPUT_DIR = unitary_test
+generate-unitary-py: src/Examples/unitary_test.vo ocaml/generate_unitary.ml python/qoreo_netsquid_runtime.py
+
+$(PYTHON_GENERATION_TARGETS): generate-%-py: ocaml/write_apps.ml
 	mkdir -p extracted generated
-	ocamlc -I extracted -c extracted/unitary_test_netqasm.mli
-	ocamlc -I extracted -c extracted/unitary_test_netqasm.ml
+	ocamlc -I extracted -c extracted/$(EXTRACTED_MODULE).mli
+	ocamlc -I extracted -c extracted/$(EXTRACTED_MODULE).ml
 	ocamlc -I extracted -I ocaml -c ocaml/write_apps.ml
-	ocamlc -I extracted -I ocaml -c ocaml/generate_unitary.ml
-	ocamlc -I extracted -I ocaml -o extracted/generate_unitary unix.cma extracted/unitary_test_netqasm.cmo ocaml/write_apps.cmo ocaml/generate_unitary.cmo
-	./extracted/generate_unitary generated/unitary_test
+	ocamlc -I extracted -I ocaml -c ocaml/generate_$(GENERATOR).ml
+	ocamlc -I extracted -I ocaml -o extracted/generate_$(GENERATOR) unix.cma extracted/$(EXTRACTED_MODULE).cmo ocaml/write_apps.cmo ocaml/generate_$(GENERATOR).cmo
+	./extracted/generate_$(GENERATOR) generated/$(OUTPUT_DIR)
