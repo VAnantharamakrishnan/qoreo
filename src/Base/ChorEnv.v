@@ -454,6 +454,20 @@ From Qoreo.Base Require Var Actor Config.
     end.
   Ltac solve := reflect_find; simplify.
 
+  Ltac reflect_partition :=
+    repeat match goal with
+    | [ H : ChorEnv.PartitionList _ _ |- _ ] =>
+      inversion H; subst; clear H
+    end;
+    Var.Map.Tactics.reflect_partition'.
+  Ltac specialize_partition A :=
+    repeat match goal with
+    | [ H : ChorEnv.PartitionList _ _ |- _ ] =>
+      inversion H; subst; clear H
+    | [ H : ChorEnv.Partition _ _ _ |- _ ] =>
+      specialize (H A)
+    end.
+
   (** Properties of epr *)
 
   

@@ -83,20 +83,6 @@ Proof.
 Qed.
 
 
-Ltac reflect_ChorEnv_partition :=
-    repeat match goal with
-    | [ H : ChorEnv.PartitionList _ _ |- _ ] =>
-      inversion H; subst; clear H
-    end;
-    Var.Map.Tactics.reflect_partition.
-Ltac specialize_ChorEnv_partition A :=
-    repeat match goal with
-    | [ H : ChorEnv.PartitionList _ _ |- _ ] =>
-      inversion H; subst; clear H
-    | [ H : ChorEnv.Partition _ _ _ |- _ ] =>
-      specialize (H A)
-    end.
-
 Lemma weakening_gen : forall C G D T G0,
     WellTyped G D T C ->
     forall G',
@@ -296,7 +282,7 @@ Lemma weakening_gen : forall C G D T G0,
       eapply If; eauto.
       + eapply Expr.Weakening.weakening_gen; eauto.
         ChorEnv.simplify.
-        specialize_ChorEnv_partition A.
+        ChorEnv.specialize_partition A.
         autorewrite with var_db in *.
         Var.Map.Tactics.reflect_partition.
         Var.Map.Tactics.rewrite_map (D ! A).
@@ -316,7 +302,7 @@ Lemma weakening_gen : forall C G D T G0,
             G0!A0 ⊥ D''!A0
         *)
 
-        specialize_ChorEnv_partition A0.
+        ChorEnv.specialize_partition A0.
         Var.Map.Tactics.reflect_partition.
 
         Var.Map.Tactics.rewrite_map (D!A0).
@@ -337,7 +323,7 @@ Lemma weakening_gen : forall C G D T G0,
             G0!A0 ⊥ D''!A0
         *)
 
-        specialize_ChorEnv_partition A0.
+        ChorEnv.specialize_partition A0.
         Var.Map.Tactics.reflect_partition.
 
         Var.Map.Tactics.rewrite_map (D!A0).
@@ -358,7 +344,7 @@ Lemma weakening_gen : forall C G D T G0,
             G0!A0 ⊥ D''!A0
         *)
 
-        specialize_ChorEnv_partition A0.
+        ChorEnv.specialize_partition A0.
         Var.Map.Tactics.reflect_partition.
 
         Var.Map.Tactics.rewrite_map (D!A0).

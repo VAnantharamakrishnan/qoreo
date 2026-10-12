@@ -865,7 +865,7 @@ Proof.
     *)
     assert (HTheta : Var.Map.Equal Theta (T0'!B)).
     {
-      specialize_ChorEnv_partition B.
+      ChorEnv.specialize_partition B.
       Var.Map.Tactics.reflect_partition.
       Var.Map.Tactics.rewrite_map (T!B).
       eapply concat_disjoint_injective; [ | | eauto];
@@ -892,7 +892,7 @@ Proof.
           (Var.Map.concat   (T'0!B)
                             (T0'!B)))).
       {
-        specialize_ChorEnv_partition B.
+        ChorEnv.specialize_partition B.
         Var.Map.Tactics.reflect_partition.
         2:{
           Var.Map.Tactics.rewrite_map (T!B).
@@ -920,7 +920,7 @@ Proof.
       unfold T2''.
       repeat rewrite ChorEnv_concat_find.
       
-      specialize_ChorEnv_partition B.
+      ChorEnv.specialize_partition B.
       Var.Map.Tactics.reflect_partition.
       2:{
         Var.Map.Tactics.rewrite_map (T'!B).
@@ -952,7 +952,7 @@ Proof.
           (Var.Map.concat   (T'0!A)
                             (T0'!A)))).
       {
-        specialize_ChorEnv_partition A.
+        ChorEnv.specialize_partition A.
         Var.Map.Tactics.reflect_partition.
         2:{
           Var.Map.Tactics.rewrite_map (T!A).
@@ -981,7 +981,7 @@ Proof.
         (Theta := Var.Map.concat ThetaA (T'0!A));
         eauto.
     + admit (* true *).
-    + specialize_ChorEnv_partition A.
+    + ChorEnv.specialize_partition A.
       Var.Map.Tactics.reflect_partition.
       2:{
         Var.Map.Tactics.rewrite_map (T1'!A).
@@ -997,12 +997,12 @@ Proof.
       
     + unfold T2'' in *. repeat rewrite ChorEnv_concat_find.
         clear T2''.
-      specialize_ChorEnv_partition A.
+      ChorEnv.specialize_partition A.
       apply partition_sym.
       Var.simplify.
       
     + intros B0 HB0.
-      specialize_ChorEnv_partition B0.
+      ChorEnv.specialize_partition B0.
       Var.Map.Tactics.reflect_partition.
       Var.Map.Tactics.rewrite_map (T1'!B0).
       Var.Map.Tactics.rewrite_map (M2!B0).
@@ -1014,7 +1014,7 @@ Proof.
       admit.
 
     + intros B0 HB0.
-      specialize_ChorEnv_partition B0.
+      ChorEnv.specialize_partition B0.
       Var.Map.Tactics.reflect_partition.
       unfold T2'' in *. repeat rewrite ChorEnv_concat_find.
         clear T2''.
@@ -1141,7 +1141,7 @@ Proof.
     exists (ChorEnv_concat (Actor.Map.singleton A ThetaA) T'0).
     split.
     + intros B.
-      specialize_ChorEnv_partition B.
+      ChorEnv.specialize_partition B.
       Var.Map.Tactics.reflect_partition'.
       Var.Map.Tactics.rewrite_map (T1'!B).
       Var.Map.Tactics.rewrite_map (M2!B).
@@ -2125,7 +2125,7 @@ Proof.
     assert (Hactive : Var.Map.Equal (ChorEnv.find A T)
                        (ChorEnv.find A T1')).
     { 
-      specialize_ChorEnv_partition A.
+      ChorEnv.specialize_partition A.
       Var.Map.Tactics.reflect_partition'.
       Var.Map.Tactics.rewrite_map (T!A).
       rewrite Hsame.
@@ -2194,7 +2194,7 @@ Proof.
           rewrite ChorEnv_concat_find.
           unfold Actor.Map.singleton.
 
-          specialize_ChorEnv_partition D0.
+          ChorEnv.specialize_partition D0.
           Var.Map.Tactics.reflect_partition'.
           Var.Map.Tactics.rewrite_map (T!D0).
 
@@ -2352,9 +2352,7 @@ Proof.
         repeat rewrite find_add.
         specialize (Hpart A).
         Var.Map.Tactics.reflect_partition'.
-        Search T.
         Var.Map.Tactics.rewrite_map (T!A).
-        Search T1'.
         rewrite Heq1 in *.
         
         Var.Map.Tactics.reflect_partition.
@@ -2394,7 +2392,7 @@ Proof.
     assert (HTA : Var.Map.Partition (T!A) (T1''!A) 
       (Var.Map.concat ThetaA1 (T0'!A))).
     {
-      specialize_ChorEnv_partition A.
+      ChorEnv.specialize_partition A.
       Var.Map.Tactics.reflect_partition'.
       unfold T1''. rewrite find_add.
       Var.Map.Tactics.rewrite_map (T!A).
@@ -2479,7 +2477,6 @@ Proof.
           specialize (Hpart A).
           Var.Map.Tactics.reflect_partition'.
           Var.Map.Tactics.rewrite_map (T!A).
-          Search T1'.
           rewrite Heq3 in *.
           unfold Theta' in *.
           Var.Map.Tactics.reflect_partition.
@@ -2511,7 +2508,6 @@ Proof.
         }
         Var.Map.Tactics.reflect_partition'.
 
-        Search T1'.
         match goal with
         | [ H : Var.Map.Equal (T1'!A) (Var.Map.concat ThetaA1 ThetaA2) |- _ ] =>
           rewrite H in *
@@ -2568,7 +2564,7 @@ Proof.
           unfold Actor.Map.singleton.
           autorewrite with var_db.
 
-          specialize_ChorEnv_partition D0.
+          ChorEnv.specialize_partition D0.
           Var.Map.Tactics.reflect_partition'.
           Var.Map.Tactics.rewrite_map (T!D0).
 
@@ -2617,7 +2613,7 @@ Proof.
       split.
       2:{
         intros B ThetaB HpartB.
-        specialize_ChorEnv_partition B.
+        ChorEnv.specialize_partition B.
         Var.Map.Tactics.reflect_partition'.
         Search T. (* Heq, Heq3, Heq0 *)
         assert (HThetaB : Var.Map.Equal ThetaB (T0'!B)).
@@ -2847,7 +2843,7 @@ Proof.
           intros D0.
           rewrite ChorEnv_concat_find.
           unfold Actor.Map.singleton.
-          specialize_ChorEnv_partition D0.
+          ChorEnv.specialize_partition D0.
           Var.Map.Tactics.reflect_partition'.
           Var.Map.Tactics.rewrite_map (T!D0).
           Actor.Map.Tactics.compare A D0.
@@ -3107,7 +3103,7 @@ Proof.
           intros D0.
           rewrite ChorEnv_concat_find.
           unfold Actor.Map.singleton.
-          specialize_ChorEnv_partition D0.
+          ChorEnv.specialize_partition D0.
           Var.Map.Tactics.reflect_partition'.
           Var.Map.Tactics.rewrite_map (T!D0).
           Actor.Map.Tactics.compare A D0.
@@ -3587,15 +3583,14 @@ Proof.
     rewrite HD, HT. auto.
   * constructor; auto.
     2:{
-      specialize_ChorEnv_partition A.
+      ChorEnv.specialize_partition A.
       Var.Map.Tactics.reflect_partition.
       Var.Map.Tactics.rewrite_map (D0!A).
       Var.simplify. split; auto.
-      Search D2.
       admit (*?*).
     }
     2:{
-      specialize_ChorEnv_partition B.
+      ChorEnv.specialize_partition B.
       Var.Map.Tactics.reflect_partition.
       Var.Map.Tactics.rewrite_map (D0!B).
       Var.simplify. split; auto.
@@ -3625,8 +3620,8 @@ Proof.
   inversion Hstep; subst; clear Hstep;
     inversion HWT; subst; clear HWT.
   * rewrite H0; clear T' H0.
-    eapply WellTyped_preservation_seq; eauto.
-    destruct b; eauto.
+    (*eapply WellTyped_preservation_seq; eauto.
+    destruct b; eauto.*)
 
 Admitted.
 
