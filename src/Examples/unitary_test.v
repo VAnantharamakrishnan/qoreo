@@ -1,6 +1,6 @@
 From Stdlib Require Import String.
 From Qoreo Require Import Expr.Expr Choreography.Choreography.
-From Qoreo.Examples Require Import Notation.
+From Qoreo.Choreography Require Import Notation.
 Import ExampleExtraction.
 From Stdlib Require Import extraction.ExtrOcamlNativeString.
 From Qoreo Require Import NetQasm.

@@ -24,13 +24,14 @@ src/Choreography/Proofs.v
 src/Choreography/Substitution.v
 src/Choreography/Weakening.v
 
+src/Choreography/Notation.v
+src/Choreography/OldNotation.v
+
 src/Network/Network.v
 src/Network/Proofs.v
 
 src/NetQasm.v
 
-src/Examples/Notation.v
-src/Examples/OldNotation.v
 src/Examples/Teleportation.v
 src/Examples/MeasureSend.v
 src/Examples/B92.v
