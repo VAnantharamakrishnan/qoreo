@@ -61,3 +61,12 @@ generate-unitary-py: examples/unitary_test.vo ocaml/write_apps.ml ocaml/generate
 	ocamlc -I extracted -I ocaml -c ocaml/generate_unitary.ml
 	ocamlc -I extracted -I ocaml -o extracted/generate_unitary unix.cma extracted/unitary_test_netqasm.cmo ocaml/write_apps.cmo ocaml/generate_unitary.cmo
 	./extracted/generate_unitary generated/unitary_test
+
+generate-conditional-test-py: examples/conditional_test.vo ocaml/write_apps.ml ocaml/generate_conditional_test.ml python/qoreo_netsquid_runtime.py
+	mkdir -p extracted generated
+	ocamlc -I extracted -c extracted/conditional_test_netqasm.mli
+	ocamlc -I extracted -c extracted/conditional_test_netqasm.ml
+	ocamlc -I extracted -I ocaml -c ocaml/write_apps.ml
+	ocamlc -I extracted -I ocaml -c ocaml/generate_conditional_test.ml
+	ocamlc -I extracted -I ocaml -o extracted/generate_conditional_test unix.cma extracted/conditional_test_netqasm.cmo ocaml/write_apps.cmo ocaml/generate_conditional_test.cmo
+	./extracted/generate_conditional_test generated/conditional_test

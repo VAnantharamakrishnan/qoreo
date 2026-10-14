@@ -1,5 +1,9 @@
 From Stdlib Require Import String.
-From Qoreo Require Import Base Expr Choreography.
+(*From Qoreo Require Import Base Expr Choreography.*)
+From Qoreo.Base Require Import Config Var Actor.
+From Qoreo.Expr Require Import Expr.
+From Qoreo.Choreography Require Import Choreography.
+From Qoreo.Network Require Import Network.
 From QoreoExamples Require Import Notation.
 Import ExampleExtraction.
 From Stdlib Require Import extraction.ExtrOcamlNativeString.
@@ -7,6 +11,9 @@ From Qoreo Require Import NetQasm.
 
 Open Scope string_scope.
 Open Scope example_scope.
+Import Unitary.
+From Stdlib Require Import List.
+Import ListNotations.
 
 Module DQFT.
   (* Distributed QFT example taken from: https://arxiv.org/pdf/2606.18494 *)
@@ -29,7 +36,7 @@ Module DQFT.
   do m0 ← Alice [- Meas a0 -] ;;
   do m0_bob ← send Alice m0 Bob ;;
   do a1 ←
-      Bob [- If m0_bob
+      Bob [- Expr.If m0_bob
                  (Unitary X a1)
                  a1 -] ;;
  
@@ -44,7 +51,7 @@ Module DQFT.
   do m1 ← Bob [- Meas a1 -] ;;
   do m1_alice ← send Bob m1 Alice ;;
   do q0 ←
-      Alice [- If m1_alice
+      Alice [- Expr.If m1_alice
                  (Unitary Z q0)
                  q0 -] ;;
   (* H on q1 *)

@@ -1,5 +1,9 @@
 From Stdlib Require Import String.
-From Qoreo Require Import Base Expr Choreography.
+(*From Qoreo Require Import Base Expr Choreography.*)
+From Qoreo.Base Require Import Config Var Actor.
+From Qoreo.Expr Require Import Expr.
+From Qoreo.Choreography Require Import Choreography.
+From Qoreo.Network Require Import Network.
 From QoreoExamples Require Import Notation.
 Import ExampleExtraction.
 From Stdlib Require Import extraction.ExtrOcamlNativeString.
@@ -7,6 +11,9 @@ From Qoreo Require Import NetQasm.
 
 Open Scope string_scope.
 Open Scope example_scope.
+Import Unitary.
+From Stdlib Require Import List.
+Import ListNotations.
 
 (*Simple test case file I wrote to check functionality of a new added gate. When adding a new gate,
 * Refer to: https://gate.directory/ to find the inverse cancelling operation if not intuitive
