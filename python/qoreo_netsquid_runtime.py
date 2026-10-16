@@ -11,7 +11,7 @@ from netsquid.components import ClassicalChannel, QuantumChannel
 from netsquid.components.qprocessor import QuantumProcessor
 from netsquid.protocols import NodeProtocol
 from netsquid.qubits import create_qubits, qubitapi as qapi, ketstates as ks
-from netsquid.qubits.operators import Operator
+from netsquid.qubits.operators import Operator, create_rotation_op
 
 # Added support for gates not inbuilt in NetSquid 
 S = Operator("S", np.diag([1, 1j]))
@@ -24,7 +24,7 @@ CT = Operator("CT", np.diag([1, 1, 1, np.exp(1j * np.pi / 4)]))
 CTdag = Operator("CTdag", np.diag([1, 1, 1, np.exp(-1j * np.pi / 4)]))
 
 
-def Unitary(gate: str, value: Any) -> Any:
+def Unitary(gate: str | tuple, value: Any) -> Any:
     gates = {
         "H": ns.H, "X": ns.X, "Y": ns.Y, "Z": ns.Z,
         "SGATE": S, "TGATE": T, "Sdag": Sdag, "Tdag": Tdag,
@@ -35,6 +35,13 @@ def Unitary(gate: str, value: Any) -> Any:
         "CS": CS, "CSdag": CSdag,
         "CT": CT, "CTdag": CTdag,
     }
+
+    # Rotations are (name, num, den), with angle num/den * pi
+    if isinstance(gate, tuple):
+        gate, num, den = gate
+        rz = create_rotation_op(num * np.pi / den, rotation_axis=(0, 0, 1))
+        gates["RZ"] = rz
+        controlled_gates["CRZ"] = rz.ctrl
 
     if gate in controlled_gates:
         if not isinstance(value, tuple) or len(value) != 2:
