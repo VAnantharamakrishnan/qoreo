@@ -1,5 +1,5 @@
 
-From Stdlib Require Import String List.
+From Stdlib Require Import String List QArith.
 From Qoreo.Base Require Import Config Var Actor.
 From Qoreo.Expr Require Import Expr.
 From Qoreo.Choreography Require Import Choreography.
@@ -11,48 +11,43 @@ From Qoreo Require Import NetQasm.
 
 Open Scope string_scope.
 Open Scope example_scope.
+Open Scope Q_scope.
 Import Unitary.
 Import ListNotations.
 
 Module DistributedGrover.
 
-  (* Local CZ using H(target), CNOT, H(target). *)
+   (* Based on the simple implementation defined by this paper:
+    https://www.nature.com/articles/s41586-024-08404-
+    No. of EPR pairs used here: 2
+    For now, 11 is hard-coded as the marked state. TO DO: Randomize this and test *)
   Definition local_cz
       (P : Actor.t) (control target : Var.t)
       : Qoreo (Var.t * Var.t) :=
-    do target ← P [- Unitary H target -] ;;
+
     do (control, target) ←
-      P [-- Unitary CNOT (Pair control target) -] ;;
-    do target ← P [- Unitary H target -] ;;
+      P [-- Unitary (CRZ (1#1))
+            (Pair control target) -] ;;
+
+    do control ←
+      P [- Unitary (RZ (-1#2)) control -] ;;
+
     ret (control, target).
 
-  (* Remote CZ on Alice's and Bob's data qubits.
-
-     EPR resource: Phi+
-     Convert to Psi+ by applying X to Bob's EPR half.
-
-     Alice measures her EPR half in X basis.
-     Bob measures his EPR half in Y basis.
-
-     Feed-forward:
-       Alice: S Z^(mA xor mB)
-       Bob:   Sdag Z^(mA xor mB)
-
-     Applying Z for each measured bit separately
-     implements the XOR parity, since Z^2 = I.
+  (* This follows from the way remote gates were implemented in the dqft example. The function was created to increase readability
   *)
   Definition remote_cz
       (Alice Bob : Actor.t)
       (qA qB : Var.t)
       : Qoreo (Var.t * Var.t) :=
 
-    (* One shared EPR pair *)
+    (* Generate one EPR pair *)
     do (a, b) ← get_entangled_pair Alice Bob ;;
 
-    (* Phi+ -> Psi+ *)
+    (* Convert Phi+ to Psi+ *)
     do b ← Bob [- Unitary X b -] ;;
 
-    (* Local CZ between data and network qubits *)
+    (* Local CZ between each data qubit and ancilla *)
     do (qA, a) ← local_cz Alice qA a ;;
     do (qB, b) ← local_cz Bob qB b ;;
 
@@ -69,40 +64,43 @@ Module DistributedGrover.
     do mA_bob ← send Alice mA Bob ;;
     do mB_alice ← send Bob mB Alice ;;
 
-    (* Alice: S Z^(mA xor mB) *)
+    (* Alice applies corrections *)
     do qA ← Alice [- Unitary SGATE qA -] ;;
+
     do qA ← Alice [- Expr.If mA
                         (Unitary Z qA)
                         qA -] ;;
+
     do qA ← Alice [- Expr.If mB_alice
                         (Unitary Z qA)
                         qA -] ;;
 
-    (* Bob: Sdag Z^(mA xor mB) *)
+    (* Bob applies corrections *)
     do qB ← Bob [- Unitary Sdag qB -] ;;
+
     do qB ← Bob [- Expr.If mA_bob
                       (Unitary Z qB)
                       qB -] ;;
+
     do qB ← Bob [- Expr.If mB
                       (Unitary Z qB)
                       qB -] ;;
 
     ret (qA, qB).
 
-  (* Two-qubit distributed Grover: marked state |11>. *)
-  Definition grover_11
+  
+  Definition grover
       (Alice Bob : Actor.t)
       : Qoreo (Var.t * Var.t) :=
 
-    (* Initialize |00> *)
+    
     do qA ← Alice [- New (Bit false) -] ;;
     do qB ← Bob [- New (Bit false) -] ;;
 
-    (* Prepare uniform superposition *)
+    
     do qA ← Alice [- Unitary H qA -] ;;
     do qB ← Bob [- Unitary H qB -] ;;
 
-    (* Oracle: phase flip of |11> *)
     do (qA, qB) ← remote_cz Alice Bob qA qB ;;
 
     (* Diffusion operator *)
@@ -112,7 +110,6 @@ Module DistributedGrover.
     do qA ← Alice [- Unitary X qA -] ;;
     do qB ← Bob [- Unitary X qB -] ;;
 
-    (* Second remote CZ *)
     do (qA, qB) ← remote_cz Alice Bob qA qB ;;
 
     do qA ← Alice [- Unitary X qA -] ;;
@@ -121,16 +118,14 @@ Module DistributedGrover.
     do qA ← Alice [- Unitary H qA -] ;;
     do qB ← Bob [- Unitary H qB -] ;;
 
-    (* Measure final result *)
     do resultA ← Alice [- Meas qA -] ;;
     do resultB ← Bob [- Meas qB -] ;;
 
-    (* Return both measurement bits *)
     ret (resultA, resultB).
 
   Definition choreo : Choreography.t :=
     mk (
-      do result ← grover_11 "alice" "bob" ;;
+      do result ← grover "alice" "bob" ;;
       ret result
     ).
 

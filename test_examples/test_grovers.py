@@ -69,10 +69,9 @@ if __name__ == "__main__":
     counts = {}
 
     for _ in range(shots):
-        print("Reached shot")
         alice_result, bob_result = run_once()
 
-        # Assumes each generated app returns its own measurement bit.
+        # Alice and Bob each own 1 qubit.
         result = (int(alice_result), int(bob_result))
         counts[result] = counts.get(result, 0) + 1
 
