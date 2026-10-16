@@ -1,14 +1,16 @@
 PYTHON_GENERATION_TARGETS := \
-	generate-teleportation-py \
 	generate-measure-send-py \
 	generate-b92-py \
 	generate-dqft-py \
-	generate-unitary-py
+	generate-unitary-py \
+	generate-teleportation-py
 
-.PHONY: all clean $(PYTHON_GENERATION_TARGETS)
+.PHONY: all clean $(PYTHON_GENERATION_TARGETS) examples
 
 all: CoqMakefile
 	$(MAKE) -f CoqMakefile
+
+examples: $(PYTHON_GENERATION_TARGETS)
 
 proofs: CoqMakefile
 	$(MAKE) -f CoqMakefile

@@ -1,12 +1,12 @@
 From Stdlib Require Import String.
 From Stdlib Require Lists.List.
 From Stdlib Require Import extraction.ExtrOcamlNativeString.
-Import List.ListNotations.
+Export List.ListNotations.
 From Stdlib Require Import Setoid.
 
 
 From Qoreo.Base Require Config.
-Import Config.Unitary.
+Export Config.Unitary.
 From Qoreo Require Import Expr.Expr Choreography.Choreography.
 From Qoreo Require Import Network.Network NetQasm.
 Require Extraction.
@@ -53,8 +53,9 @@ Declare Scope example_scope.
   |}.
 
   (** Extract the underlying choreography from a monadic computation. *)
-  Definition mk {T} (m : Qoreo T) : state * T :=
-    m empty_state.
+  Definition mk {T} (m : Qoreo T) : Choreography.t :=
+    let (st, _) := m empty_state in 
+    chor st.
 
   (** Allocate a fresh variable and map it to the actor [A] in the underlying state. *)
   Definition fresh A : Qoreo Var.t :=
