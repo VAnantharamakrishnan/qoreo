@@ -4,8 +4,7 @@ From Qoreo Require Import Base.Config Expr.Expr Choreography.Choreography.
 Import Config.Unitary.
 Import Expr.
 
-From QoreoExamples Require Import Notation.
-Import ExampleExtraction.
+From Qoreo.Choreography Require Import Notation.
 
 From Stdlib Require Import extraction.ExtrOcamlNativeString.
 From Qoreo Require Import NetQasm.
@@ -25,7 +24,7 @@ Module ConditionalTest.
         chor := Choreography.seq (chor s) C
       |}, tt).
 
-  Definition conditional_test (Alice Bob Charlie : Actor.t) : Qoreo unit :=
+  Definition conditional_test (Alice Bob Charlie : Actor.t) : Qoreo (list Var.t) :=
   (*Definition conditional_test (Alice Bob Charlie : Actor.t) : Qoreo (Var.t * (Var.t * Var.t)) := *)
     do q ← Alice [- Unitary H (New (Bit false)) -] ;;
     do m ← Alice [- Meas q -] ;;
@@ -64,7 +63,8 @@ Module ConditionalTest.
   do charlie_final ← Charlie [- Var charlie_result -] ;;
 
   (*ret (alice_final, (bob_final, charlie_final)). *)*)
-  ret tt.
+  (*ret tt.*)
+  ret [].
 
   Definition choreo : Choreography.t :=
     mk (do result ← conditional_test "alice" "bob" "charlie" ;;
@@ -74,7 +74,7 @@ Module ConditionalTest.
     ["alice"; "bob"; "charlie"].
 
   Definition apps : option (list AppFile.t) :=
-    ExampleExtraction.render_parties choreo parties.
+    Notation.render_Qoreo NetSquid parties (conditional_test "alice" "bob" "charlie").
 
 End ConditionalTest.
 

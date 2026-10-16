@@ -4,8 +4,7 @@ From Qoreo.Base Require Import Config Var Actor.
 From Qoreo.Expr Require Import Expr.
 From Qoreo.Choreography Require Import Choreography.
 From Qoreo.Network Require Import Network.
-From QoreoExamples Require Import Notation.
-Import ExampleExtraction.
+From Qoreo.Choreography Require Import Notation.
 From Stdlib Require Import extraction.ExtrOcamlNativeString.
 From Qoreo Require Import NetQasm.
 
@@ -91,7 +90,7 @@ Module DistributedGrover.
   
   Definition grover
       (Alice Bob : Actor.t)
-      : Qoreo (Var.t * Var.t) :=
+      : Qoreo (list Var.t) :=
 
     
     do qA ← Alice [- New (Bit false) -] ;;
@@ -121,7 +120,7 @@ Module DistributedGrover.
     do resultA ← Alice [- Meas qA -] ;;
     do resultB ← Bob [- Meas qB -] ;;
 
-    ret (resultA, resultB).
+    ret [resultA; resultB].
 
   Definition choreo : Choreography.t :=
     mk (
@@ -133,7 +132,7 @@ Module DistributedGrover.
     ["alice"; "bob"].
 
   Definition apps : option (list AppFile.t) :=
-    ExampleExtraction.render_parties choreo parties.
+    render_Qoreo NetSquid parties (grover "alice" "bob").
 
 End DistributedGrover.
 

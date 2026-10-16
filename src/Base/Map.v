@@ -26,6 +26,7 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
 
   Definition Singleton {A} (x : key) (a : A) (m : M.t A) : Prop :=
     M.Equal m (M.add x a (M.empty _)).
+  Definition singleton {A} (x : key) (a : A) := M.add x a (M.empty _).
 
   Definition concat {A} (m1 m2 : t A) : t A :=
     M.fold (fun k v acc => M.add k v acc) m1 m2.
@@ -39,6 +40,15 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
 
 
   Definition Partition {A} := @Properties.Partition A.
+
+
+  Import List.ListNotations.
+  Inductive PartitionList {α} : M.t α -> list (M.t α) -> Prop :=
+  | PartitionEq : forall M, PartitionList M [M]
+  | PartitionCons : forall M M1 M2 ls,
+    Partition M M1 M2 ->
+    PartitionList M2 ls ->
+    PartitionList M (M1::ls).
 
   (* Rewrite/auto databases *)
   #[local] Existing Instance F.EqualSetoid.
@@ -163,6 +173,14 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
       autorewrite with qoreo_db.
       compare A B; auto.
     Qed.
+
+    (** PartitionList *)
+
+    #[local] Instance PartitionListProper : forall A,
+      Proper (@M.Equal A ==> SetoidList.eqlistA M.Equal ==> iff) (@PartitionList A).
+    Proof.
+    Admitted.
+
 
     (** Domain *)
 
@@ -1042,7 +1060,7 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
       - auto.
     Qed.
 
-    Ltac reflect_partition :=
+    Ltac reflect_partition' :=
       repeat match goal with
             | [ H : Partition ?m ?m1 ?m2 |- _ ] =>
               apply partition_concat in H;
@@ -1050,13 +1068,19 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
               let Heq := fresh "Heq" in
               destruct H as [Hdisj Heq];
               subst_map
-            | [ |- Partition ?m ?m1 ?m2 ] =>
-              apply partition_concat; split
             | [ H : context[M.map _ (concat _ _)] |- _] =>
               rewrite map_concat in H
             | [ |- context[M.map _ (concat _ _)] ] =>
               rewrite map_concat
+            | [ H : PartitionList _ _ |- _ ] => inversion H; subst; clear H
       end.
+      Ltac reflect_partition :=
+        reflect_partition';
+        try match goal with
+        | [ |- Partition ?m ?m1 ?m2 ] =>
+              apply partition_concat; split
+        end.
+
 
     (** Lemmas about Partition *)
 
@@ -3212,7 +3236,15 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
     Ltac compare x y := Proofs.compare x y.
     Ltac reduce_eq_dec := Proofs.reduce_eq_dec.
     Ltac subst_map := Proofs.subst_map.
+
+    Ltac rewrite_map tgt :=
+      match goal with
+      | [ H : M.Equal tgt _ |- _ ] =>
+        rewrite H in *
+      end.
+
     Ltac reflect_partition := Proofs.reflect_partition.
+    Ltac reflect_partition' := Proofs.reflect_partition'.
     Ltac vsimpl := Proofs.vsimpl.
     Ltac partition_concat := Proofs.partition_concat.
     Ltac solve := Proofs.solve.

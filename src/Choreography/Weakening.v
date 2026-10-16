@@ -67,17 +67,21 @@ Proof.
       Var.simplify.
     }
 
-  * Actor.Map.Tactics.compare A A0.
-    + Var.Map.Tactics.reflect_partition.
-      rewrite Heq0.
-      Var.simplify.
-      repeat split; auto.
-      eapply Expr.BaseProofs.wt_disjoint; eauto.
-    + specialize (H2 A Heq); specialize (H5 A Heq).
-      Var.Map.Tactics.reflect_partition.
-      rewrite Heq2.
-      Var.simplify.
+  * 
+    rename M2 into T0, H7 into HpartT, H6 into HpartT0,
+           M0 into D0, H8 into HpartD, H5 into HpartD0.
+    specialize (HpartD A).
+    specialize (HpartD0 A).
+    Var.Map.Tactics.reflect_partition.
+    Var.Map.Tactics.rewrite_map (D!A).
+    Var.Map.Tactics.rewrite_map (D0!A).
+    Var.simplify.
+    repeat split; auto.
+    unfold Actor.Map.singleton in *.
+    ChorEnv.simplify.
+    eapply Expr.BaseProofs.wt_disjoint; eauto.
 Qed.
+
 
 Lemma weakening_gen : forall C G D T G0,
     WellTyped G D T C ->
@@ -274,74 +278,78 @@ Lemma weakening_gen : forall C G D T G0,
         }
           
       }*)
-      eapply If.
+
+      eapply If; eauto.
       + eapply Expr.Weakening.weakening_gen; eauto.
-        destruct (HE A) as [HEpart HEdisj].
+        ChorEnv.simplify.
+        ChorEnv.specialize_partition A.
+        autorewrite with var_db in *.
         Var.Map.Tactics.reflect_partition.
-        rewrite Heq2 in *.
+        Var.Map.Tactics.rewrite_map (D ! A).
         Var.simplify.
-      + eapply IHHWT1; eauto.
+        
+      + eapply IHHWT1.
         intros A0.
         destruct (HE A0) as [HEpart HEdisj].
         split; eauto.
-        Actor.Map.Tactics.compare A0 A.
-        {
-          Var.Map.Tactics.reflect_partition.
-          rewrite Heq2 in *.
-          Var.simplify.
-        }
-        {
-          specialize (H2 A0 Heq);
-          specialize (H5 A0 Heq).
-          Var.Map.Tactics.reflect_partition.
-          rewrite Heq4 in *. Var.simplify.
-        }
-      + eapply IHHWT2; eauto.
-        intros A0.
-        destruct (HE A0) as [HEpart HEdisj].
-        split; eauto.
-        Actor.Map.Tactics.compare A0 A.
-        {
-          Var.Map.Tactics.reflect_partition.
-          rewrite Heq2 in *.
-          Var.simplify.
-        }
-        {
-          specialize (H2 A0 Heq);
-          specialize (H5 A0 Heq).
-          Var.Map.Tactics.reflect_partition.
-          rewrite Heq4 in *. Var.simplify.
-        }
 
-      + eapply IHHWT3; eauto.
+        (* Want: G0!A0 ⊥ D'!A0
+          Know:
+            G0!A0 ⊥ D!A0
+            D = (A ↦ DeltaA) ++ D' ++ D''
+          So:
+            G0!A0 ⊥ D'!A0
+            G0!A0 ⊥ D''!A0
+        *)
+
+        ChorEnv.specialize_partition A0.
+        Var.Map.Tactics.reflect_partition.
+
+        Var.Map.Tactics.rewrite_map (D!A0).
+        Var.Map.Tactics.rewrite_map (M0!A0).
+        Var.simplify.
+
+      + eapply IHHWT2.
         intros A0.
         destruct (HE A0) as [HEpart HEdisj].
         split; eauto.
-        Actor.Map.Tactics.compare A0 A.
-        {
-          Var.Map.Tactics.reflect_partition.
-          rewrite Heq2 in *.
-          Var.simplify.
-        }
-        {
-          specialize (H2 A0 Heq);
-          specialize (H5 A0 Heq).
-          Var.Map.Tactics.reflect_partition.
-          rewrite Heq4 in *. Var.simplify.
-        }
 
-      + Var.Map.Tactics.reflect_partition.
-        2:{ rewrite Heq1. reflexivity. }
+        (* Want: G0!A0 ⊥ D'!A0
+          Know:
+            G0!A0 ⊥ D!A0
+            D = (A ↦ DeltaA) ++ D' ++ D''
+          So:
+            G0!A0 ⊥ D'!A0
+            G0!A0 ⊥ D''!A0
+        *)
+
+        ChorEnv.specialize_partition A0.
+        Var.Map.Tactics.reflect_partition.
+
+        Var.Map.Tactics.rewrite_map (D!A0).
+        Var.Map.Tactics.rewrite_map (M0!A0).
         Var.simplify.
-      + Var.Map.Tactics.reflect_partition; eauto.
-        reflexivity.
-      + auto.
-      + Var.Map.Tactics.reflect_partition.
-        2:{ rewrite Heq0. reflexivity. }
+
+      + eapply IHHWT3.
+        intros A0.
+        destruct (HE A0) as [HEpart HEdisj].
+        split; eauto.
+
+        (* Want: G0!A0 ⊥ D''!A0
+          Know:
+            G0!A0 ⊥ D!A0
+            D = (A ↦ DeltaA) ++ D' ++ D''
+          So:
+            G0!A0 ⊥ D'!A0
+            G0!A0 ⊥ D''!A0
+        *)
+
+        ChorEnv.specialize_partition A0.
+        Var.Map.Tactics.reflect_partition.
+
+        Var.Map.Tactics.rewrite_map (D!A0).
+        Var.Map.Tactics.rewrite_map (M0!A0).
         Var.simplify.
-      + Var.Map.Tactics.reflect_partition; eauto.
-        reflexivity.
-      + auto.
   Qed.
 
 

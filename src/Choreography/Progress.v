@@ -391,12 +391,22 @@ Proof.
     3:{
         assert (HD : Var.Map.Empty (ChorEnv.find A D)).
         { rewrite (HDempty A). auto with var_db. }
-        Var.Map.Tactics.reflect_partition.
-        rewrite Heq0 in *.
-        repeat rewrite Map.Proofs.Empty_concat in HD.
-        destruct HD; auto.
+        ChorEnv.specialize_partition A.
+        Var.Map.Tactics.reflect_partition'.
+        specialize (HDempty A).
+        Var.Map.Tactics.rewrite_map (D!A).
+        Var.simplify.
+        assert (Var.Map.Equal DeltaA (Var.Map.empty _)).
+        { intros z. specialize (HD z).
+          Var.simplify.
+          destruct (Var.Map.find z DeltaA); auto; discriminate.
+        }
+        Var.simplify.
     }
-    2:{ eapply ChorEnv.ws_partition; eauto. }
+    2:{ ChorEnv.specialize_partition A.
+        Var.simplify.
+        eapply ChorEnv.ws_partition; eauto.
+    }
 
     destruct H as [HvaleL | [e' [Θ' [cfg1' Hstep']]]].
     {
@@ -421,8 +431,19 @@ Proof.
       eapply IfC; eauto.
       2:{ reflexivity. }
 
-      eapply Expr.Preservation.cfg_weakening_1;
+      eapply Expr.Preservation.cfg_weakening_1
+        with (Θ2 :=  (Var.Map.concat (T'!A) (T''!A)));
         eauto.
+     
+      {
+        ChorEnv.specialize_partition A.
+        Var.Map.Tactics.reflect_partition'.
+        Var.Map.Tactics.rewrite_map (T!A).
+        Var.Map.Tactics.rewrite_map (M2!A).
+        autorewrite with var_db.
+        Var.Map.Tactics.reflect_partition; [ | reflexivity].
+        Var.simplify. 
+      }
 
       (* TA = Θ' ++ ThetaA' *)
       (* WTS  Θ' disjoint from ThetaA' *)
@@ -436,8 +457,16 @@ Proof.
         and e / ThetaA -> e' / Θ',
         therefore Θ' is disjoint from ThetaA'
       *)
-      assert (Hdisj : Var.Map.Properties.Disjoint Θ' ThetaA').
-      { eapply step_scope; eauto. }
+      assert (Hdisj : Var.Map.Properties.Disjoint Θ' (Var.Map.concat (T'!A) (T''!A))).
+      { eapply step_scope; eauto.
+        ChorEnv.specialize_partition A.
+        Var.Map.Tactics.reflect_partition'.
+        Var.Map.Tactics.rewrite_map (T!A).
+        Var.Map.Tactics.rewrite_map (M2!A).
+        autorewrite with var_db.
+        Var.Map.Tactics.reflect_partition; [ | reflexivity].
+        Var.simplify. 
+      }
 
       Var.Map.Tactics.reflect_partition; auto.
       reflexivity.

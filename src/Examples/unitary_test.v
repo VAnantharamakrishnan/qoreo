@@ -1,15 +1,12 @@
-
-From Stdlib Require Import String List QArith.
-From Qoreo.Base Require Import Config Var Actor.
-From Qoreo.Expr Require Import Expr.
-From Qoreo.Choreography Require Import Choreography.
-From Qoreo.Network Require Import Network.
-From QoreoExamples Require Import Notation.
-Import ExampleExtraction.
+From Stdlib Require Import String.
+From Qoreo.Base Require Import Config. Import Unitary.
+From Qoreo Require Import Expr.Expr Choreography.Choreography.
+From Qoreo.Choreography Require Import Notation.
 From Stdlib Require Import extraction.ExtrOcamlNativeString.
 From Qoreo Require Import NetQasm.
+From Stdlib Require Import QArith.
 
-Import ListNotations.
+Import List.ListNotations.
 Import Unitary.
 Open Scope string_scope.
 Open Scope example_scope.
@@ -68,6 +65,7 @@ Module UnitaryTest.
     do r ← Alice [- Meas target -] ;;
     ret r.
 
+
   (* RZ(pi/4) is equivalent to T up to global phase. *)
   Definition rz_t_test (Alice : Actor.t) : Qoreo Var.t :=
     do q ← Alice [- Unitary H (New (Bit false)) -] ;;
@@ -114,48 +112,38 @@ Module UnitaryTest.
     do r ← Alice [- Meas target -] ;;
     ret r.
 
-  Definition choreo : Choreography.t :=
-    mk (
-      do t_result        ← tdag_test "alice" ;;
-      do s_result        ← sdag_test "alice" ;;
-      do cs_result       ← cs_test "alice" ;;
-      do ct_result       ← ct_test "alice" ;;
-      do csdag_result    ← csdag_test "alice" ;;
-      do ctdag_result    ← ctdag_test "alice" ;;
+   Definition choreo : Qoreo (list Var.t) :=
+      do t_result     ← tdag_test "alice" ;;
+      do s_result     ← sdag_test "alice" ;;
+      do cs_result    ← cs_test "alice" ;;
+      do ct_result    ← ct_test "alice" ;;
+      do csdag_result ← csdag_test "alice" ;;
+      do ctdag_result ← ctdag_test "alice" ;;
+
       do rz_t_result     ← rz_t_test "alice" ;;
       do rz_arb_result   ← rz_arbitrary_test "alice" ;;
       do rz_prob_result  ← rz_probability_test "alice" ;;
       do crz_inv_result  ← crz_inverse_test "alice" ;;
       do crz_prob_result ← crz_probability_test "alice" ;;
 
-      "alice" [- Pair
-        (Pair
-          (Pair
-            (Var t_result)
-            (Var s_result))
-          (Pair
-            (Var cs_result)
-            (Var ct_result)))
-        (Pair
-          (Pair
-            (Var csdag_result)
-            (Var ctdag_result))
-          (Pair
-            (Pair
-              (Var rz_t_result)
-              (Var rz_arb_result))
-            (Pair
-              (Var rz_prob_result)
-              (Pair
-                (Var crz_inv_result)
-                (Var crz_prob_result)))))
-      -]
-    ).
+      ret [ t_result; s_result;
+            cs_result; ct_result; 
+            csdag_result; ctdag_result;
+            rz_t_result; rz_arb_result;
+            rz_prob_result;
+            crz_inv_result; crz_prob_result
+            ].
+      (*"alice" [- Pair
+                    (Pair
+                      (Pair (Var t_result) (Var s_result))
+                      (Pair (Var cs_result) (Var ct_result)))
+                    (Pair (Var csdag_result) (Var ctdag_result))
+              -]*)
 
   Definition parties : list Actor.t := ["alice"].
 
   Definition apps : option (list AppFile.t) :=
-    ExampleExtraction.render_parties choreo parties.
+    Notation.render_Qoreo NetSquid parties choreo.
 
 End UnitaryTest.
 
