@@ -1,30 +1,17 @@
-(**
-  This file defines some common structures used in the formaliztion
-        - `FMap_fun`/`FMap` - finite maps
-        - `Var` - variables represented as natural numbers
-        - `unitary` - data structure of unitary gates
-        - `Config` - quantum states represented as QuantumLib density matrices
-        - `Actor` - actors in a network, represented as strings
-        - `ChorEnv` - specialized finite maps from pairs of actors and variable names.
-*)
-
-
 From Stdlib Require FSets.FMapList FSets.FSetList 
                             FSets.FMapFacts
                             FSets.FMapInterface
                             OrderedType OrderedTypeEx.
-From QuantumLib Require Import Matrix Pad Quantum.
-From Stdlib Require QArith.
-From Stdlib Require Import String Morphisms (* for Proper *).
-Require Import Setoid. (* for setoid_replace with *)
+From Stdlib Require Export String.
+From Stdlib Require Export Morphisms. (* for Proper *)
+Require Export Setoid. (* for setoid_replace with *)
+
 
 From Stdlib Require Lists.List.
 Export List.ListNotations.
 Open Scope list_scope.
 
 Declare Scope qoreo.
-Create HintDb var_db.
-Create HintDb actor_db.
 Create HintDb qoreo_db.
 
 (** Generic map theory: extends FMapFacts.Properties with definitions and
@@ -39,6 +26,7 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
 
   Definition Singleton {A} (x : key) (a : A) (m : M.t A) : Prop :=
     M.Equal m (M.add x a (M.empty _)).
+  Definition singleton {A} (x : key) (a : A) := M.add x a (M.empty _).
 
   Definition concat {A} (m1 m2 : t A) : t A :=
     M.fold (fun k v acc => M.add k v acc) m1 m2.
@@ -50,7 +38,17 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
   Definition setminus {T} (S : FSet.t) (N : M.t T) : M.t T :=
     FSet.fold (fun x N' => M.remove x N') S N.
 
+
   Definition Partition {A} := @Properties.Partition A.
+
+
+  Import List.ListNotations.
+  Inductive PartitionList {α} : M.t α -> list (M.t α) -> Prop :=
+  | PartitionEq : forall M, PartitionList M [M]
+  | PartitionCons : forall M M1 M2 ls,
+    Partition M M1 M2 ->
+    PartitionList M2 ls ->
+    PartitionList M (M1::ls).
 
   (* Rewrite/auto databases *)
   #[local] Existing Instance F.EqualSetoid.
@@ -175,6 +173,14 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
       autorewrite with qoreo_db.
       compare A B; auto.
     Qed.
+
+    (** PartitionList *)
+
+    #[local] Instance PartitionListProper : forall A,
+      Proper (@M.Equal A ==> SetoidList.eqlistA M.Equal ==> iff) (@PartitionList A).
+    Proof.
+    Admitted.
+
 
     (** Domain *)
 
@@ -1054,7 +1060,7 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
       - auto.
     Qed.
 
-    Ltac reflect_partition :=
+    Ltac reflect_partition' :=
       repeat match goal with
             | [ H : Partition ?m ?m1 ?m2 |- _ ] =>
               apply partition_concat in H;
@@ -1062,13 +1068,19 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
               let Heq := fresh "Heq" in
               destruct H as [Hdisj Heq];
               subst_map
-            | [ |- Partition ?m ?m1 ?m2 ] =>
-              apply partition_concat; split
             | [ H : context[M.map _ (concat _ _)] |- _] =>
               rewrite map_concat in H
             | [ |- context[M.map _ (concat _ _)] ] =>
               rewrite map_concat
+            | [ H : PartitionList _ _ |- _ ] => inversion H; subst; clear H
       end.
+      Ltac reflect_partition :=
+        reflect_partition';
+        try match goal with
+        | [ |- Partition ?m ?m1 ?m2 ] =>
+              apply partition_concat; split
+        end.
+
 
     (** Lemmas about Partition *)
 
@@ -1291,6 +1303,9 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
       intuition.
     Qed.
 
+    Lemma and_not_or : forall P Q : Prop, ~P /\ ~Q -> ~(P \/ Q).
+    Proof. tauto. Qed.
+
 
     (* move m to the left-most element of the concatenation list *)
     Ltac reduce_concat :=
@@ -1443,7 +1458,7 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
         assert (Hr : ~Q) by tauto;
         clear H
     | [ |- ~ (_ \/ _) ] =>
-      apply Classical_Prop.and_not_or
+      apply and_not_or
     | [ H : _ /\ _ |- _ ] =>
       destruct H
 
@@ -1701,8 +1716,8 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
       Equal b1 b2 ->
       Proper (Equal ==> E.eq ==> Equal) f ->
 
-      M.Equal (fold_left f ls1 b1)
-              (fold_left f ls2 b2).
+      M.Equal (List.fold_left f ls1 b1)
+              (List.fold_left f ls2 b2).
     Proof.
       
       intros ls1 ls2 Hls;
@@ -1768,7 +1783,7 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
     Qed.
 
     Lemma mapsto_fset_fold_iff : forall T ls x a (m : t T),
-      MapsTo x a (fold_left (fun n x => remove x n) ls m)
+      MapsTo x a (List.fold_left (fun n x => remove x n) ls m)
       <->
       ~ SetoidList.InA E.eq x ls /\ M.MapsTo x a m.
     Proof.
@@ -1815,8 +1830,8 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
       SetoidList.InA E.eq A ls ->
       SetoidList.NoDupA E.eq ls ->
       M.Equal
-        (fold_left (fun n x => remove x n) ls m)
-        (fold_left (fun n x => remove x n) (SetoidList.removeA E.eq_dec A ls) (remove A m)).
+        (List.fold_left (fun n x => remove x n) ls m)
+        (List.fold_left (fun n x => remove x n) (SetoidList.removeA E.eq_dec A ls) (remove A m)).
     Proof.
       induction ls as [ | B ls]; intros T A m Hin Hdup.
       * simpl. inversion Hin.
@@ -2005,7 +2020,7 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
 
     Lemma find_fold_left_nin : forall ls x T (M : t T),
       ~ M.In x M ->
-      find x (fold_left (fun ls' x' => remove x' ls') ls M)
+      find x (List.fold_left (fun ls' x' => remove x' ls') ls M)
         = None.
     Proof.
       induction ls as [ | y ls]; intros x T M Hin; simpl.
@@ -2021,7 +2036,7 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
 
     Lemma find_fold_left_nin_remove : forall ls x T (M : t T),
       ~ SetoidList.InA E.eq x ls ->
-      find x (fold_left (fun ls' x' => remove x' ls') ls M)
+      find x (List.fold_left (fun ls' x' => remove x' ls') ls M)
         = find x M.
     Proof.
       induction ls as [ | y ls]; intros x T M Hin; auto.
@@ -2040,7 +2055,7 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
     Lemma find_fold_left_in_remove : forall ls x,
       SetoidList.InA E.eq x ls ->
       forall  T (M : t T),
-      find x (fold_left (fun ls' x' => remove x' ls') ls M)
+      find x (List.fold_left (fun ls' x' => remove x' ls') ls M)
         = None.
     Proof.
       intros ls x Hin.
@@ -2096,6 +2111,1106 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
 
   End FSetProofs.
 
+  Module Reflection.
+
+  Inductive SetData :=
+    | PrimSD : FSet.t -> SetData
+    | EmptySD : SetData
+    | AddSD : key -> SetData -> SetData
+    | RemoveSD : key -> SetData -> SetData
+    | UnionSD : SetData -> SetData -> SetData
+    | IntersectSD : SetData -> SetData -> SetData
+    .
+
+  Module NormalSetData.
+    (* 
+        X ::= {x1,...,xn} ∪ Y1 ∪ ... ∪ Yn
+        Y ::= Z1 ∩ ... ∩ Zm (must be non-empty)
+        Z ::= Prim | Remove x Z
+    *)
+    Inductive NSD_Z := PrimNSD : FSet.t -> NSD_Z | RemoveNSD : key -> NSD_Z -> NSD_Z.
+    Inductive NSD_Y := ZNSD : NSD_Z -> NSD_Y | ConsNSD : NSD_Z -> NSD_Y -> NSD_Y.
+    Definition NSD := (list key * list NSD_Y)%type.
+
+    Fixpoint appY Y1 Y2 :=
+      match Y1 with
+      | ZNSD Z1 => ConsNSD Z1 Y2
+      | ConsNSD Z1 Y1' => ConsNSD Z1 (appY Y1' Y2)
+      end.
+    Fixpoint mapY f Y :=
+      match Y with
+      | ZNSD Z => ZNSD (f Z)
+      | ConsNSD Z Y' => ConsNSD (f Z) (mapY f Y')
+      end.
+
+    (* From SetData to NSD *)
+    (*
+    PrimSD : FSet.t -> SetData
+    | EmptySD : SetData
+    | AddSD : key -> SetData -> SetData
+    | RemoveSD : key -> SetData -> SetData
+    | UnionSD : SetData -> SetData -> SetData
+    | IntersectSD : SetData -> SetData -> SetData
+    *)
+    Definition primSD (X : FSet.t) : NSD :=
+      ([],[ZNSD (PrimNSD X)]).
+
+    Definition emptySD : NSD := ([],[]).
+
+    Fixpoint insertKey (k : key) (l : list key) : list key :=
+    match l with
+    | [] => [k]
+    | k'::l' =>
+      if E.eq_dec k k' then k'::l'
+      else k' :: insertKey k l'
+    end.
+    Definition addSD (x : key) (X : NSD) : NSD :=
+      let (ks, Ys) := X in
+      (insertKey x ks, Ys).
+
+    
+  Fixpoint removeKey k (l : list key) : list key :=
+    match l with
+    | [] => []
+    | k'::l' => 
+      if E.eq_dec k k'
+      then removeKey k l'
+      else k' :: removeKey k l'
+    end.
+    
+  Fixpoint remove_NSD_Z k (Z : NSD_Z) :=
+    match Z with
+    | PrimNSD _ => RemoveNSD k Z
+    | RemoveNSD k' Z' =>
+      if E.eq_dec k k'
+      then Z
+      else RemoveNSD k' (remove_NSD_Z k Z')
+    end.
+  Definition remove_NSD_Y k (Y : NSD_Y) : NSD_Y :=
+    mapY (remove_NSD_Z k) Y.
+  Definition removeSD k (X : NSD) : NSD :=
+    let (l,Ys) := X in
+    (removeKey k l, List.map (remove_NSD_Y k) Ys).
+
+  Fixpoint unionKeys (l1 l2 : list key) : list key :=
+    match l1 with
+    | [] => l2
+    | k :: l1' => unionKeys l1' (insertKey k l2)
+    end.
+
+  Definition unionSD (X1 X2 : NSD) : NSD :=
+    let (keys1, Ys1) := X1 in
+    let (keys2, Ys2) := X2 in
+    (unionKeys keys1 keys2, List.app Ys1 Ys2).
+
+
+  (* Intersection *)
+  Fixpoint key_in (k : key) (l : list key) : bool :=
+    match l with
+    | [] => false
+    | k' :: l' => if E.eq_dec k k' then true else key_in k l'
+    end.
+  Fixpoint intersectKeys (keys1 keys2 : list key) : list key :=
+    match keys1 with
+    | [] => []
+    | k :: keys1' =>
+      if key_in k keys2
+      then k :: intersectKeys keys1' keys2
+      else intersectKeys keys1' keys2
+    end.
+
+  Definition intersectKeyY (k : key) (Y : NSD_Y) : NSD_Y :=
+    ConsNSD (PrimNSD (FSet.singleton k)) Y.
+
+  Definition intersectKeysX (keys : list key) (X : list NSD_Y)
+      : list NSD_Y :=
+    List.concat
+      (List.map (fun k => List.map (intersectKeyY k) X) keys).
+
+  (* Ys1 = Y1 ∪ ... ∪ Yn
+     Ys2 = Y1' ∪ ... ∪ Ym'
+
+     Ys1 ∩ Ys2 = Y1 ∩ Y1' ∪ ... ∪ Yn ∩ Ym'
+   *)
+  Definition intersectX (X1 X2 : list NSD_Y) : list NSD_Y :=
+    List.concat
+      (List.map (fun Y1 => List.map (appY Y1) X2) X1).
+
+  (* Intersect key atoms directly; distribute key/conjunction and conjunction/
+     conjunction pairs while keeping each result in NSD_Y form. *)
+  Definition intersectSD (X1 X2 : NSD) : NSD :=
+    let (keys1, Ys1) := X1 in
+    let (keys2, Ys2) := X2 in
+    (intersectKeys keys1 keys2,
+     List.app (intersectKeysX keys1 Ys2)
+       (List.app (intersectKeysX keys2 Ys1) (intersectX Ys1 Ys2))).
+
+
+
+
+    (* From SetData to NSD *)
+    (*
+    PrimSD : FSet.t -> SetData
+    | EmptySD : SetData
+    | AddSD : key -> SetData -> SetData
+    | RemoveSD : key -> SetData -> SetData
+    | UnionSD : SetData -> SetData -> SetData
+    | IntersectSD : SetData -> SetData -> SetData
+    *)
+  
+    Fixpoint to_NSD (X : SetData) : NSD :=
+      match X with
+      | PrimSD Z => primSD Z
+      | EmptySD  => emptySD
+      | AddSD x X' => addSD x (to_NSD X')
+      | RemoveSD x X' => removeSD x (to_NSD X')
+      | UnionSD X1 X2 => unionSD (to_NSD X1) (to_NSD X2)
+      | IntersectSD X1 X2 => intersectSD (to_NSD X1) (to_NSD X2)
+      end.
+
+    (* From NSD to SetData *)
+
+    Fixpoint from_NSD_Z (Z : NSD_Z) : SetData :=
+      match Z with
+      | PrimNSD X => PrimSD X
+      | RemoveNSD k Z' => RemoveSD k (from_NSD_Z Z')
+      end.
+    Fixpoint from_NSD_Y (Y : NSD_Y) :=
+      match Y with
+      | ZNSD Z => from_NSD_Z Z
+      | ConsNSD Z Y' => IntersectSD (from_NSD_Z Z) (from_NSD_Y Y')
+      end.
+    Fixpoint from_NSD_X (X : list NSD_Y) :=
+      match X with
+      | [] => EmptySD
+      | Y::X' => UnionSD (from_NSD_Y Y) (from_NSD_X X')
+      end.
+    Fixpoint from_NSD' (l : list key) (X : SetData) :=
+      match l with
+      | [] => X
+      | k::l' => from_NSD' l' (AddSD k X)
+      end.
+    Definition from_NSD (X : NSD) : SetData :=
+      let (l,X') := X in
+      from_NSD' l (from_NSD_X X').
+
+  End NormalSetData.
+
+  Fixpoint fromSetData (S : SetData) : FSet.t :=
+    match S with
+    | PrimSD X => X
+    | EmptySD => FSet.empty
+    | AddSD x S' => FSet.add x (fromSetData S')
+    | RemoveSD x S' => FSet.remove x (fromSetData S')
+    | UnionSD S1 S2 => FSet.union (fromSetData S1) (fromSetData S2)
+    | IntersectSD S1 S2 => FSet.inter (fromSetData S1) (fromSetData S2)
+    end.
+
+    Module Proof.
+
+      Lemma from_NSD_add : forall x X,
+        FSet.Equal
+          (fromSetData (NormalSetData.from_NSD (NormalSetData.addSD x X)))
+          (fromSetData (AddSD x (NormalSetData.from_NSD X))).
+      Proof.
+        intros x [keys Ys].
+        simpl.
+        assert (Hadd : forall ls k S,
+            FSet.Equal
+              (fromSetData
+                (NormalSetData.from_NSD' ls (AddSD k S)))
+              (fromSetData
+                (AddSD k (NormalSetData.from_NSD' ls S)))).
+        {
+          intros ls.
+          induction ls as [| y ls IH]; intros k S.
+          - simpl. reflexivity.
+          - simpl. rewrite IH. rewrite IH. 
+            simpl. rewrite IH.
+            simpl.
+            intros z. 
+            repeat rewrite FSetProperties.add_iff.
+            tauto.
+        }
+        assert (Hinsert : forall ls k S,
+            FSet.Equal
+              (fromSetData
+                (NormalSetData.from_NSD'
+                  (NormalSetData.insertKey k ls) S))
+              (fromSetData
+                (AddSD k (NormalSetData.from_NSD' ls S)))).
+        {
+          intros ls.
+          induction ls as [| y ls IH]; intros k S.
+          - simpl. reflexivity.
+          - simpl.
+            destruct (E.eq_dec k y) as [Heq | Hneq].
+            + rewrite Heq.
+              simpl.
+              rewrite (Hadd ls y S).
+              simpl.
+              intros z.
+              repeat rewrite FSetProperties.add_iff.
+              tauto.
+            + simpl.
+              rewrite (IH _ (AddSD y S)).
+              reflexivity.
+        }
+        apply Hinsert.
+      Qed.
+
+      Lemma from_remove_NSD_Z : forall x Z,
+            FSet.Equal
+              (fromSetData (NormalSetData.from_NSD_Z
+                (NormalSetData.remove_NSD_Z x Z)))
+              (fromSetData (RemoveSD x
+                (NormalSetData.from_NSD_Z Z))).
+      Proof.
+          intros x Z.
+          induction Z as [S | k Z IH].
+          - simpl. intros z.
+            repeat rewrite FSetProperties.remove_iff.
+            tauto.
+          - simpl.
+            destruct (E.eq_dec x k) as [Heq | Hneq].
+            + rewrite Heq. simpl. intros z.
+              repeat rewrite FSetProperties.remove_iff.
+              tauto.
+            + simpl. rewrite IH. simpl.
+              intros z. repeat rewrite FSetProperties.remove_iff.
+              tauto.
+      Qed.
+
+      Lemma from_remove_NSD_Y : forall x Y,
+            FSet.Equal
+              (fromSetData (NormalSetData.from_NSD_Y
+                (NormalSetData.remove_NSD_Y x Y)))
+              (fromSetData (RemoveSD x
+                (NormalSetData.from_NSD_Y Y))).
+      Proof.
+        intros x Y; induction Y as [Z | Z Y].
+          - simpl. 
+            repeat rewrite from_remove_NSD_Z.
+            simpl.
+            reflexivity.
+          - simpl. 
+            repeat rewrite from_remove_NSD_Z.
+            simpl.
+            rewrite IHY.
+            simpl.
+            intros z.
+            rewrite FSetProperties.inter_iff.
+            repeat rewrite FSetProperties.remove_iff.          
+            rewrite FSetProperties.inter_iff.
+            tauto.
+      Qed.
+
+      Lemma from_remove_NSD_X : forall x Ys,
+            FSet.Equal
+              (fromSetData (NormalSetData.from_NSD_X
+                (List.map (NormalSetData.remove_NSD_Y x) Ys)))
+              (fromSetData (RemoveSD x
+                (NormalSetData.from_NSD_X Ys))).
+      Proof.
+          intros x Ys.
+          induction Ys as [| Y Ys IH].
+          - simpl. intros z.
+            repeat rewrite FSetProperties.remove_iff.
+            rewrite FSetProperties.empty_iff.
+            tauto.
+          - simpl.
+            rewrite from_remove_NSD_Y.
+            rewrite IH. simpl.
+            intros z.
+            repeat rewrite FSetProperties.union_iff.
+            repeat rewrite FSetProperties.remove_iff.
+            repeat rewrite FSetProperties.union_iff.
+            tauto.
+      Qed.
+
+      Lemma from_NSD'_iff : forall ls z X,
+        FSet.In z (fromSetData (NormalSetData.from_NSD' ls X))
+        <->
+        SetoidList.InA E.eq z ls \/ FSet.In z (fromSetData X).
+      Proof.
+        induction ls as [ | k ls]; intros z X; simpl.
+        * rewrite SetoidList.InA_nil.
+          tauto.
+        * rewrite IHls.
+          simpl.
+          rewrite FSetProperties.add_iff.
+          rewrite SetoidList.InA_cons.
+          intuition.
+      Qed.
+
+      Lemma in_removeKey_iff : forall ls x z,
+        SetoidList.InA E.eq z (NormalSetData.removeKey x ls)
+        <->
+        SetoidList.InA E.eq z ls /\ ~ E.eq x z.
+      Proof.
+        induction ls as [ | k ls]; intros x z; simpl.
+        * rewrite SetoidList.InA_nil. tauto.
+        * rewrite SetoidList.InA_cons.
+          Proofs.compare x k.
+          + rewrite IHls. intuition.
+            absurd (E.eq x z); auto.
+            symmetry; auto.
+          + rewrite SetoidList.InA_cons.
+            rewrite IHls.
+            intuition.
+            rewrite <- H in H0.
+            auto.
+      Qed.
+
+      Lemma from_remove_NSD' : forall x ls X,
+        ~ FSet.In x (fromSetData X) ->
+        FSet.Equal
+          (fromSetData (NormalSetData.from_NSD' (NormalSetData.removeKey x ls) X))
+          (fromSetData (RemoveSD x (NormalSetData.from_NSD' ls X))).
+      Proof.
+        intros x ls.
+        induction ls as [ | k ls']; intros X Hin.
+        * simpl. intros z.
+          repeat rewrite FSetProperties.remove_iff.
+          Proofs.compare x z.
+          + tauto.
+          + tauto.
+        * simpl. Proofs.compare x k.
+          + rewrite IHls'; auto.
+            simpl.
+            intros z.
+            repeat rewrite FSetProperties.remove_iff.
+            repeat rewrite from_NSD'_iff.
+            simpl.
+            repeat rewrite FSetProperties.add_iff.
+            rewrite Heq.
+            tauto.
+          + simpl.
+            intros z.
+            repeat rewrite FSetProperties.remove_iff.
+            repeat rewrite from_NSD'_iff.
+            simpl.
+            repeat rewrite FSetProperties.add_iff.
+            rewrite in_removeKey_iff.
+            intuition.
+            { apply Heq. rewrite H. auto. }
+            { rewrite <- H0 in H. contradiction. }
+      Qed. 
+
+
+      Lemma NSD_X_iff : forall X z,
+        FSet.In z (fromSetData (NormalSetData.from_NSD_X X))
+        <->
+        exists Y, List.In Y X /\ FSet.In z (fromSetData (NormalSetData.from_NSD_Y Y)).
+      Proof.
+        induction X as [ | Y X]; intros z; simpl.
+        * rewrite FSetProperties.empty_iff.
+          intuition.
+          destruct H as [Y [? ?]].
+          tauto.
+        * repeat rewrite FSetProperties.union_iff.
+          rewrite IHX.
+          intuition.
+          + exists Y; auto.
+          + destruct H0 as [Y0 [H0 H0']].
+            exists Y0. tauto.
+          + destruct H as [Y0 [[? | H0] H0']].
+            - subst. auto.
+            - right. exists Y0; auto.
+      Qed.
+
+      Inductive InY Z : NormalSetData.NSD_Y -> Prop :=
+      | InBaseY : InY Z (NormalSetData.ZNSD Z)
+      | InHeadY : forall Y, InY Z (NormalSetData.ConsNSD Z Y)
+      | InTailY : forall Y Z0,
+        InY Z Y ->
+        InY Z (NormalSetData.ConsNSD Z0 Y).
+      
+
+      Lemma NSD_Y_iff : forall z Y,
+        FSet.In z (fromSetData (NormalSetData.from_NSD_Y Y))
+        <->
+        forall Z, InY Z Y -> FSet.In z (fromSetData (NormalSetData.from_NSD_Z Z)).
+      Proof.
+        intros z; induction Y as [ Z | Z Y].
+        * simpl. intuition.
+          + inversion H0; subst; auto.
+          + apply H. constructor. 
+        * simpl.
+          rewrite FSetProperties.inter_iff.
+          rewrite IHY.
+          split.
+          + intros [H1 H2] Z0 HZ0.
+            inversion HZ0; subst; auto.
+          + intros H.
+            split; auto.
+            { apply H. constructor. }
+            {
+              intros Z0 HZ0. apply H.
+              apply InTailY; auto.
+            }
+      Qed.  
+
+
+      Lemma from_NSD_remove : forall x X,
+        FSet.Equal
+          (fromSetData (NormalSetData.from_NSD (NormalSetData.removeSD x X)))
+          (fromSetData (RemoveSD x (NormalSetData.from_NSD X))).
+      Proof.
+        intros x [keys Ys] z.
+        simpl.
+        rewrite FSetProperties.remove_iff.
+        rewrite from_remove_NSD'.
+        2:{
+          rewrite NSD_X_iff.
+          intros [Y [HY Hin]].
+          rewrite List.in_map_iff in HY.
+          destruct HY as [Y0 [? HY]]; subst.
+          rewrite from_remove_NSD_Y in Hin.
+          simpl in Hin.
+          rewrite FSetProperties.remove_iff in Hin.
+          destruct Hin as [_ Hin]; apply Hin; reflexivity.
+        }
+        repeat rewrite from_NSD'_iff.
+        simpl.
+        rewrite FSetProperties.remove_iff.
+        repeat rewrite from_NSD'_iff.
+        split.
+        * intuition.
+          right.
+          rewrite NSD_X_iff in *.
+          destruct H as [Y [HY H]].
+          rewrite List.in_map_iff in HY.
+          destruct HY as [Y0 [? HY0]]; subst.
+          exists Y0.
+          split; auto.
+          rewrite from_remove_NSD_Y in H.
+          simpl in H. rewrite FSetProperties.remove_iff in H.
+          intuition.
+        * intuition.
+          right.
+          rewrite NSD_X_iff in *.
+          destruct H as [Y [HY H]].
+          exists (NormalSetData.remove_NSD_Y x Y).
+          split.
+          + rewrite List.in_map_iff.
+            exists Y; auto.
+          + rewrite from_remove_NSD_Y. simpl.
+            rewrite FSetProperties.remove_iff.
+            auto.
+      Qed.
+
+      Lemma in_insertKey_iff : forall k ls z,
+        SetoidList.InA E.eq z (NormalSetData.insertKey k ls) <->
+        E.eq z k \/ SetoidList.InA E.eq z ls.
+      Proof.
+        intros k ls.
+        induction ls as [| y ls IH]; intros z; simpl.
+        - rewrite SetoidList.InA_cons.
+          tauto.
+        - Proofs.compare k y.
+          + rewrite SetoidList.InA_cons.
+            tauto.
+          + repeat rewrite SetoidList.InA_cons.
+            rewrite IH.
+            tauto.
+      Qed.
+
+      Lemma in_unionKeys_iff : forall ls1 ls2 z,
+        SetoidList.InA E.eq z (NormalSetData.unionKeys ls1 ls2) <->
+        SetoidList.InA E.eq z ls1 \/ SetoidList.InA E.eq z ls2.
+      Proof.
+        intros ls1.
+        induction ls1 as [| k ls1 IH]; intros ls2 z; simpl.
+        - rewrite SetoidList.InA_nil. tauto.
+        - repeat rewrite SetoidList.InA_cons, IH, in_insertKey_iff.
+          tauto.
+      Qed.
+
+      Lemma from_NSD_X_app : forall Ys1 Ys2,
+        FSet.Equal
+          (fromSetData
+            (NormalSetData.from_NSD_X (List.app Ys1 Ys2)))
+          (FSet.union
+            (fromSetData (NormalSetData.from_NSD_X Ys1))
+            (fromSetData (NormalSetData.from_NSD_X Ys2))).
+      Proof.
+        intros Ys1 Ys2 z.
+        induction Ys1 as [| Y Ys1 IH]; simpl.
+        - rewrite FSetProperties.union_iff, FSetProperties.empty_iff.
+          tauto.
+        - repeat rewrite FSetProperties.union_iff.
+          rewrite IH, FSetProperties.union_iff.
+          tauto.
+      Qed.
+
+      Lemma from_NSD_union : forall X1 X2,
+        FSet.Equal
+          (fromSetData (NormalSetData.from_NSD (NormalSetData.unionSD X1 X2)))
+          (fromSetData (UnionSD (NormalSetData.from_NSD X1) (NormalSetData.from_NSD X2))).
+      Proof.
+        intros [keys1 Ys1] [keys2 Ys2].
+        simpl.
+        intros z.
+        repeat rewrite from_NSD'_iff.
+        rewrite from_NSD_X_app.
+        repeat rewrite FSetProperties.union_iff, in_unionKeys_iff.
+        rewrite FSetProperties.union_iff.
+        repeat rewrite from_NSD'_iff.
+        tauto.
+      Qed.
+
+      (* Intersection *)
+      Lemma key_in_iff : forall x keys,
+        SetoidList.InA E.eq x keys
+        <->
+        NormalSetData.key_in x keys = true.
+      Proof.
+        intros x keys. induction keys as [ | k keys].
+        * rewrite SetoidList.InA_nil. simpl. intuition.
+        * simpl. rewrite SetoidList.InA_cons.
+          rewrite IHkeys.
+          Proofs.compare x k.
+          + intuition.
+          + tauto.
+      Qed.
+      Lemma intersectKeys_iff : forall keys1 keys2 x,
+        SetoidList.InA E.eq x (NormalSetData.intersectKeys keys1 keys2)
+        <->
+        SetoidList.InA E.eq x keys1 /\ SetoidList.InA E.eq x keys2.
+      Proof.
+        induction keys1 as [ | k keys1];
+          intros keys2 x; simpl.
+        * repeat rewrite SetoidList.InA_nil. tauto.
+        * rewrite SetoidList.InA_cons.
+          destruct (NormalSetData.key_in k keys2) eqn:Hin2.
+          + rewrite <- key_in_iff in Hin2.
+            rewrite SetoidList.InA_cons.
+            rewrite IHkeys1.
+            intuition.
+            rewrite H0. auto.
+          + rewrite IHkeys1.
+            intuition.
+            rewrite H in H1.
+            rewrite key_in_iff in H1.
+            rewrite H1 in Hin2.
+            discriminate.
+      Qed.
+
+
+      Lemma inY_cons_iff : forall Z Z' Y,
+        InY Z (NormalSetData.ConsNSD Z' Y)
+        <->
+        Z = Z' \/ InY Z Y.
+      Proof.
+        intros; split; intro H.
+        * inversion H; auto.
+        * destruct H; subst.
+          + constructor.
+          + apply InTailY; auto. 
+      Qed.
+      Lemma inY_Z_iff : forall Z Z',
+        InY Z (NormalSetData.ZNSD Z')
+        <->
+        Z = Z'.
+      Proof.
+        intros; split; intros H.
+        * inversion H; auto.
+        * subst; constructor. 
+      Qed.
+      Lemma inY_appY_iff : forall Y1 Y2 Z,
+          InY Z (NormalSetData.appY Y1 Y2)
+          <->
+          InY Z Y1 \/ InY Z Y2.
+      Proof.
+        induction Y1 as [ Z1 | Z1 Y1]; intros Y2 Z; simpl.
+        * rewrite inY_cons_iff. rewrite inY_Z_iff. reflexivity.
+        * repeat rewrite inY_cons_iff.
+          rewrite IHY1. tauto.   
+      Qed.
+
+
+      Lemma from_NSD_intersect_X : forall Ys1 Ys2,
+        FSet.Equal
+          (fromSetData (NormalSetData.from_NSD_X (NormalSetData.intersectX Ys1 Ys2)))
+          (FSet.inter (fromSetData (NormalSetData.from_NSD_X Ys1))
+                      (fromSetData (NormalSetData.from_NSD_X Ys2))).
+      Proof.
+        induction Ys1 as [ | Y Ys1]; intros Ys2; simpl.
+        * intros z.
+          rewrite FSetProperties.inter_iff.
+          rewrite FSetProperties.empty_iff.
+          tauto.
+        * unfold NormalSetData.intersectX in *. simpl.
+          rewrite from_NSD_X_app.
+          rewrite IHYs1.
+          intros z.
+          rewrite FSetProperties.inter_iff.
+          repeat rewrite FSetProperties.union_iff.
+          repeat rewrite FSetProperties.inter_iff.
+          rewrite NSD_X_iff.
+          intuition.
+          + destruct H0 as [Y0 [HY1 HY2]].
+            rewrite List.in_map_iff in HY1.
+            destruct HY1 as [Y' [? HY1]]. subst.
+            rewrite NSD_Y_iff in HY2.
+            rewrite NSD_Y_iff.
+            left.
+            intros Z HZ.
+            apply HY2.
+            rewrite inY_appY_iff.
+            tauto.
+            
+          + rewrite NSD_X_iff.
+            destruct H0 as [Y0 [HY1 HY2]].
+            rewrite  List.in_map_iff in HY1.
+            destruct HY1 as [Y' [? HY1]]. subst.
+            exists Y'; split; auto.
+
+            rewrite NSD_Y_iff in HY2.
+            rewrite NSD_Y_iff.
+            intros Z HZ.
+            apply HY2.
+            rewrite inY_appY_iff.
+            tauto.
+
+          + left.
+          
+            rewrite NSD_X_iff in H1.
+            destruct H1 as [Y0 [HY0 H1]].
+            
+
+            exists (NormalSetData.appY Y Y0).
+            split; auto.
+            - rewrite List.in_map_iff.
+              exists Y0. auto.
+            - rewrite NSD_Y_iff in *.
+              intros Z HZ.
+              rewrite inY_appY_iff in HZ.
+              destruct HZ as [HZ | HZ]; auto.
+      Qed.
+
+      Lemma from_NSD_intersectKeyY : forall Y k,
+        FSet.Equal
+          (fromSetData (NormalSetData.from_NSD_Y (NormalSetData.intersectKeyY k Y)))
+          (FSet.inter
+            (FSet.singleton k)
+            (fromSetData (NormalSetData.from_NSD_Y Y))).
+      Proof.
+        destruct Y as [Z | Z Y]; intros k; simpl.
+        { reflexivity. }
+        reflexivity.
+      Qed.
+      
+
+      Lemma from_NSD_intersectKeysX : forall keys X,
+        FSet.Equal
+          (fromSetData (NormalSetData.from_NSD_X (NormalSetData.intersectKeysX keys X)))
+          (FSet.inter
+            (fromSetData (NormalSetData.from_NSD' keys EmptySD))
+            (fromSetData (NormalSetData.from_NSD_X X))).
+      Proof.
+        induction keys as [ | k keys]; 
+          intros X.
+        * simpl. 
+          intros z.
+          rewrite FSetProperties.inter_iff.
+          rewrite FSetProperties.empty_iff.
+          tauto.
+        * simpl.
+          unfold NormalSetData.intersectKeysX in *.
+          simpl.
+          rewrite from_NSD_X_app.
+          
+          rewrite IHkeys.
+          intros z.
+          repeat rewrite FSetProperties.union_iff.
+          repeat rewrite FSetProperties.inter_iff.
+          repeat rewrite from_NSD'_iff.
+          simpl.
+          repeat rewrite FSetProperties.add_iff.
+          rewrite FSetProperties.empty_iff.
+          repeat rewrite NSD_X_iff.
+
+          intuition.
+          + destruct H0 as [Y [Hin1 Hin2]].
+            rewrite List.in_map_iff in Hin1.
+            destruct Hin1 as [Y0 [HinY1 HinY2]].
+            subst.
+            rewrite from_NSD_intersectKeyY in Hin2.
+            rewrite FSetProperties.inter_iff in Hin2.
+            rewrite FSetProperties.singleton_iff in Hin2.
+            tauto.
+          + destruct H0 as [Y [Hin1 Hin2]].
+            rewrite List.in_map_iff in Hin1.
+            destruct Hin1 as [Y0 [HinY1 HinY2]].
+            subst.
+            rewrite from_NSD_intersectKeyY in Hin2.
+            repeat rewrite FSetProperties.inter_iff in Hin2.
+            rewrite FSetProperties.singleton_iff in Hin2.
+            exists Y0. tauto.
+          + destruct H1 as [Y [Hin1 Hin2]].
+            destruct (NormalSetData.key_in z keys) eqn:Hin.
+            ++ right.
+               rewrite key_in_iff.
+               intuition.
+               exists Y.
+               tauto.
+            ++ left. 
+               exists (NormalSetData.intersectKeyY k Y).
+               rewrite from_NSD_intersectKeyY.
+               rewrite FSetProperties.inter_iff.
+               rewrite FSetProperties.singleton_iff.
+               intuition.
+               rewrite List.in_map_iff.
+               exists Y. split; auto.
+      Qed.
+
+      Lemma from_NSD_intersect : forall X1 X2,
+        FSet.Equal
+          (fromSetData (NormalSetData.from_NSD (NormalSetData.intersectSD X1 X2)))
+          (fromSetData (IntersectSD (NormalSetData.from_NSD X1) (NormalSetData.from_NSD X2))).
+      Proof.
+        intros [keys1 Ys1] [keys2 Ys2]. simpl.
+        intros z.
+        rewrite from_NSD'_iff.
+        rewrite intersectKeys_iff.
+        repeat rewrite from_NSD_X_app.
+        repeat rewrite FSetProperties.union_iff, FSetProperties.inter_iff.
+        repeat rewrite FSetProperties.union_iff.
+        rewrite from_NSD_intersect_X.
+        repeat rewrite from_NSD'_iff.
+        repeat rewrite from_NSD_intersectKeysX.
+        repeat rewrite FSetProperties.inter_iff.
+        repeat rewrite from_NSD'_iff.
+        simpl. rewrite FSetProperties.empty_iff.
+        tauto.
+      Qed.
+
+      Lemma to_from_NSD : forall D,
+        FSet.Equal (fromSetData (NormalSetData.from_NSD (NormalSetData.to_NSD D)))
+                  (fromSetData D).
+      Proof.
+        induction D.
+        * simpl.
+          intros z.
+          rewrite FSetProperties.union_iff.
+          rewrite FSetProperties.empty_iff.
+          intuition.
+
+        * simpl. reflexivity.
+        * simpl. rewrite from_NSD_add.
+          simpl. rewrite IHD. reflexivity.
+        * simpl. rewrite from_NSD_remove.
+          simpl. rewrite IHD.
+          reflexivity.
+        * simpl. rewrite from_NSD_union.
+          simpl. rewrite IHD1, IHD2.
+          reflexivity. 
+        * simpl. rewrite from_NSD_intersect.
+          simpl. rewrite IHD1, IHD2.
+          reflexivity. 
+      Qed.
+    End Proof.
+
+
+    Ltac reify_set e :=
+    lazymatch e with
+    | FSet.empty => constr:(EmptySD)
+    | FSet.add ?x ?S =>
+      let S' := reify_set S in
+      constr:(AddSD x S')
+    | FSet.remove ?x ?S =>
+      let S' := reify_set S in
+      constr:(RemoveSD x S')
+    | FSet.union ?S1 ?S2 =>
+      let S1' := reify_set S1 in
+      let S2' := reify_set S2 in
+      constr:(UnionSD S1' S2')
+    | FSet.inter ?S1 ?S2 =>
+      let S1' := reify_set S1 in
+      let S2' := reify_set S2 in
+      constr:(IntersectSD S1' S2')
+    | _ => constr:(PrimSD e)
+    end.
+
+  Ltac reflect_set' :=
+    match goal with
+    | [ |- FSet.Equal ?X1 ?X2 ] =>
+      let Y1 := reify_set X1 in
+      let Y2 := reify_set X2 in
+      try replace X1 with (fromSetData Y1) by reflexivity;
+      try replace X2 with (fromSetData Y2) by reflexivity;
+      try rewrite <- (Proof.to_from_NSD Y1);
+      try rewrite <- (Proof.to_from_NSD Y2);
+      simpl
+    end.
+  Ltac reflect_set :=
+    reflect_set';
+    try reflexivity;
+    repeat Proofs.reduce_eq_dec; simpl;
+    try reflexivity.
+
+  Example reflect_set_union_empty (x : key) :
+    FSet.Equal
+      (FSet.union (FSet.add x FSet.empty) FSet.empty)
+      (FSet.add x FSet.empty).
+  Proof.
+    reflect_set.
+  Qed.
+
+  Example reflect_set_intersect_empty (x : key) :
+    FSet.Equal
+      (FSet.inter (FSet.add x FSet.empty) FSet.empty)
+      FSet.empty.
+  Proof.
+    reflect_set.
+  Qed.
+  
+
+  Example reflect_set_intersect_shared_key (x : key) :
+    FSet.Equal
+      (FSet.inter (FSet.add x FSet.empty) (FSet.add x FSet.empty))
+      (FSet.add x FSet.empty).
+  Proof.
+    reflect_set.
+  Qed.
+
+  Example reflect_set_remove_added_key (x : key) :
+    FSet.Equal
+      (FSet.remove x (FSet.add x FSet.empty))
+      FSet.empty.
+  Proof.
+    reflect_set.
+  Qed.
+
+  Example reflect_set_remove_added_key' (x y : key) Z :
+    ~ E.eq y x ->
+    FSet.Equal
+      (FSet.remove x (FSet.add y (FSet.add x Z)))
+      (FSet.add y (FSet.remove x Z)).
+  Proof.
+    intros.
+    reflect_set.
+    Proofs.reduce_eq_dec; simpl.
+    Proofs.reduce_eq_dec; simpl.
+    reflexivity.
+  Qed.
+
+  Example reflect_set_opaque_union_empty (S : FSet.t) :
+    FSet.Equal (FSet.union S FSet.empty) S.
+  Proof.
+    reflect_set.
+  Qed.
+
+  Example reflect_set_intersect_distributes
+      (S1 S2 S3 : FSet.t) :
+    FSet.Equal
+      (FSet.inter (FSet.union S1 S2) S3)
+      (FSet.union (FSet.inter S1 S3) (FSet.inter S2 S3)).
+  Proof.
+    reflect_set.
+  Qed.
+
+  Inductive MapData {A} :=
+    | PrimD : M.t A -> MapData
+    | EmptyD : MapData
+    | AddD  : key -> A -> MapData -> MapData
+    | RemoveD : key -> MapData -> MapData
+    | SingletonD : key -> A -> MapData
+    | ConcatD : MapData -> MapData -> MapData
+    | SetMinusD : SetData -> MapData -> MapData.
+  Arguments MapData A : clear implicits.
+
+  Fixpoint fromMapData {A} (d : MapData A) : M.t A :=
+    match d with
+    | PrimD m => m
+    | EmptyD => M.empty _
+    | AddD x a M' => M.add x a (fromMapData M')
+    | RemoveD x M' => M.remove x (fromMapData M')
+    | SingletonD x a => M.add x a (M.empty _)
+    | ConcatD M1 M2 => concat (fromMapData M1) (fromMapData M2)
+    | SetMinusD X M' => setminus (fromSetData X) (fromMapData M')
+    end.
+
+
+  (** Normal form for maps, evaluated by [find]: a priority list of items;
+      the first item that yields [Some] wins. *)
+  Module NormalMapData.
+    Inductive Item {A} :=
+      | EntryI : key -> A -> Item
+      | PrimI : M.t A -> list key -> Item. (* map with masked keys *)
+    Arguments Item A : clear implicits.
+    Definition NMD A := list (Item A).
+
+    Definition evalItem {A} (it : Item A) (k : key) : option A :=
+      match it with
+      | EntryI x a => if E.eq_dec k x then Some a else None
+      | PrimI p ms => if NormalSetData.key_in k ms then None else M.find k p
+      end.
+
+    Fixpoint lookup {A} (l : NMD A) (k : key) : option A :=
+      match l with
+      | [] => None
+      | it :: l' =>
+        match evalItem it k with
+        | Some a => Some a
+        | None => lookup l' k
+        end
+      end.
+
+    Fixpoint removeN {A} (x : key) (l : NMD A) : NMD A :=
+      match l with
+      | [] => []
+      | EntryI k a :: l' =>
+        if E.eq_dec k x then removeN x l' else EntryI k a :: removeN x l'
+      | PrimI p ms :: l' => PrimI p (x :: ms) :: removeN x l'
+      end.
+
+    Definition addN {A} (x : key) (a : A) (l : NMD A) : NMD A :=
+      EntryI x a :: removeN x l.
+    Arguments addN : simpl never.
+
+    Definition concatN {A} (l1 l2 : NMD A) : NMD A := l1 ++ l2.
+
+    Fixpoint norm {A} (d : MapData A) : NMD A :=
+      match d with
+      | PrimD m => [PrimI m []]
+      | EmptyD => []
+      | AddD x a d' => addN x a (norm d')
+      | RemoveD x d' => removeN x (norm d')
+      | SingletonD x a => [EntryI x a]
+      | ConcatD d1 d2 => concatN (norm d1) (norm d2)
+      | SetMinusD X d' => [PrimI (setminus (fromSetData X) (fromMapData d')) []]
+      end.
+
+    Lemma lookup_removeN : forall A (l : NMD A) x k,
+      lookup (removeN x l) k = if E.eq_dec k x then None else lookup l k.
+    Proof.
+      induction l as [|[k' a|p ms] l IH]; intros x k; simpl.
+      - destruct (E.eq_dec k x); auto.
+      - destruct (E.eq_dec k' x) as [Hk'x|Hk'x].
+        + rewrite IH.
+          destruct (E.eq_dec k x) as [Hkx|Hkx]; auto.
+          destruct (E.eq_dec k k') as [Hkk'|Hkk']; auto.
+          exfalso. apply Hkx. eapply E.eq_trans; eauto.
+        + simpl. destruct (E.eq_dec k k') as [Hkk'|Hkk'].
+          * destruct (E.eq_dec k x) as [Hkx|Hkx]; auto.
+            exfalso. apply Hk'x. eapply E.eq_trans; [apply E.eq_sym|]; eauto.
+          * rewrite IH. reflexivity.
+      - simpl. rewrite IH. destruct (E.eq_dec k x); reflexivity.
+    Qed.
+
+    Lemma lookup_app : forall A (l1 l2 : NMD A) k,
+      lookup (l1 ++ l2) k = match lookup l1 k with Some a => Some a | None => lookup l2 k end.
+    Proof.
+      induction l1 as [|it l1 IH]; intros; simpl; auto.
+      destruct (evalItem it k); auto.
+    Qed.
+
+    Lemma lookup_addN : forall A x (a : A) l k,
+      lookup (addN x a l) k = if E.eq_dec k x then Some a else lookup l k.
+    Proof.
+      intros. unfold addN. simpl.
+      destruct (E.eq_dec k x); auto.
+      rewrite lookup_removeN. destruct (E.eq_dec k x); auto; contradiction.
+    Qed.
+
+    Lemma find_norm : forall A (d : MapData A) z,
+      M.find z (fromMapData d) = lookup (norm d) z.
+    Proof.
+      induction d as [m| |k a d IHd|k d IHd|k a|d1 IHd1 d2 IHd2|X d IHd]; intros z; simpl norm; simpl fromMapData.
+      - simpl lookup. destruct (M.find z m); reflexivity.
+      - apply F.empty_o.
+      - rewrite lookup_addN, F.add_o, <- IHd.
+        destruct (E.eq_dec z k), (F.eq_dec k z); try reflexivity;
+          exfalso; firstorder using E.eq_sym.
+      - rewrite lookup_removeN, F.remove_o, <- IHd.
+        destruct (E.eq_dec z k), (F.eq_dec k z); try reflexivity;
+          exfalso; firstorder using E.eq_sym.
+      - simpl lookup. rewrite F.add_o, F.empty_o.
+        destruct (E.eq_dec z k), (F.eq_dec k z); try reflexivity;
+          exfalso; firstorder using E.eq_sym.
+      - unfold concatN. rewrite Proofs.concat_find, lookup_app, IHd1, IHd2. reflexivity.
+      - simpl lookup. destruct (M.find z (setminus (fromSetData X) (fromMapData d)));
+          reflexivity.
+    Qed.
+
+    Lemma equal_of_lookup : forall A (d1 d2 : MapData A),
+      (forall k, lookup (norm d1) k = lookup (norm d2) k) ->
+      M.Equal (fromMapData d1) (fromMapData d2).
+    Proof.
+      intros A d1 d2 H k. rewrite !find_norm. apply H.
+    Qed.
+  End NormalMapData.
+
+
+    Ltac reify e :=
+    lazymatch type of e with
+    | M.t ?A =>
+      lazymatch e with
+      | M.empty _ => constr:(@EmptyD A)
+      | M.add ?x ?a (M.empty _) => constr:(@SingletonD A x a)
+      | M.add ?x ?a ?m =>
+        let m' := reify m in
+        constr:(@AddD A x a m')
+      | M.remove ?x ?m =>
+        let m' := reify m in
+        constr:(@RemoveD A x m')
+      | concat ?m1 ?m2 =>
+        let m1' := reify m1 in
+        let m2' := reify m2 in
+        constr:(@ConcatD A m1' m2')
+      | setminus ?S ?m =>
+        let S' := reify_set S in
+        let m' := reify m in
+        constr:(@SetMinusD A S' m')
+      | _ => constr:(@PrimD A e)
+      end
+    end.
+
+  Ltac reflect_map' :=
+    match goal with
+    | [ |- M.Equal ?m1 ?m2 ] =>
+      let d1 := reify m1 in
+      let d2 := reify m2 in
+      change (M.Equal (fromMapData d1) (fromMapData d2));
+      apply NormalMapData.equal_of_lookup; intro z;
+      simpl NormalMapData.norm; unfold NormalMapData.addN;
+      simpl NormalMapData.removeN; simpl NormalMapData.lookup
+    end.
+
+  Ltac reflect_map :=
+    reflect_map';
+    repeat (Proofs.reduce_eq_dec; simpl);
+    try reflexivity;
+    try (exfalso; eauto using E.eq_sym, E.eq_trans).
+
+  Example reflect_map_add_remove {A} (x : key) (a : A) (m : M.t A) :
+    M.Equal (M.remove x (M.add x a m)) (M.remove x m).
+  Proof. reflect_map. Qed.
+
+  Example reflect_map_add_add {A} (x : key) (a b : A) (m : M.t A) :
+    M.Equal (M.add x a (M.add x b m)) (M.add x a m).
+  Proof. reflect_map. Qed.
+
+  Example reflect_map_concat_empty {A} (m : M.t A) :
+    M.Equal (concat m (M.empty A)) m.
+  Proof. reflect_map. Qed.
+
+  Example reflect_map_add_comm {A} (x y : key) (a b : A) (m : M.t A) :
+    ~ E.eq x y ->
+    M.Equal (M.add x a (M.add y b m)) (M.add y b (M.add x a m)).
+  Proof.
+    intros. reflect_map.
+  Qed.
+
+  Example reflect_map_concat_add {A} (x : key) (a : A) (m1 m2 : M.t A) :
+    M.Equal (concat (M.add x a m1) m2) (M.add x a (concat m1 m2)).
+  Proof. reflect_map. Qed.
+
+  End Reflection.
+
   Module Tactics.
   (**
     Provides:
@@ -2121,7 +3236,15 @@ Module FMap_fun (E : OrderedType.OrderedType) (M : FMapInterface.Sfun E) (FSet :
     Ltac compare x y := Proofs.compare x y.
     Ltac reduce_eq_dec := Proofs.reduce_eq_dec.
     Ltac subst_map := Proofs.subst_map.
+
+    Ltac rewrite_map tgt :=
+      match goal with
+      | [ H : M.Equal tgt _ |- _ ] =>
+        rewrite H in *
+      end.
+
     Ltac reflect_partition := Proofs.reflect_partition.
+    Ltac reflect_partition' := Proofs.reflect_partition'.
     Ltac vsimpl := Proofs.vsimpl.
     Ltac partition_concat := Proofs.partition_concat.
     Ltac solve := Proofs.solve.
@@ -2139,1164 +3262,3 @@ Module FMap (E0 : OrderedType.OrderedType) <: FMapInterface.S.
   Module MProofs := FMap_fun E M S.
   Include MProofs.
 End FMap.
-
-Module Var.
-
-  Module V := OrderedTypeEx.UOT_to_OT (OrderedTypeEx.Nat_as_OT).
-  Include V.
-  Module Map := FMap V.
-  Module FSet := Map.S.
-
-  Definition fresh {A} (m : Map.t A) :=
-    let f := fun x _ z_fresh => if Nat.leb z_fresh x then (x+1)%nat else z_fresh in
-    Map.fold f m 0%nat.
-
-  
-  Ltac simplify :=
-    repeat
-    (autorewrite with var_db in *;
-      Map.Tactics.vsimpl;
-      repeat Map.Tactics.reduce_eq_dec;
-      try (first [tauto | reflexivity | discriminate | auto | intuition]; fail)).
-
-  (* instantiate this for each relevant hint database *)
-  Ltac reflect_find :=
-    repeat (
-      Map.Proofs.reflect_find_body;
-      autorewrite with var_db in *;
-      repeat Map.Tactics.reduce_eq_dec
-    ).
-  Ltac solve := 
-    repeat (reflect_find; first [tauto | discriminate | auto; fail | intuition]).
-
-  (* Global var_db hints: instantiations of FMap_fun's local qoreo_db hints for Var.Map *)
-  #[global] Hint Rewrite Map.Properties.F.add_mapsto_iff : var_db.
-  #[global] Hint Rewrite Map.Properties.F.empty_mapsto_iff : var_db.
-  #[global] Hint Rewrite Map.Properties.F.add_in_iff : var_db.
-  #[global] Hint Rewrite Map.Properties.F.map_o : var_db.
-  #[global] Hint Rewrite Map.Properties.F.remove_o : var_db.
-  #[global] Hint Rewrite Map.Properties.F.add_o : var_db.
-  #[global] Hint Rewrite Map.Properties.F.empty_o : var_db.
-  #[global] Hint Rewrite Map.Properties.F.map_in_iff : var_db.
-  #[global] Hint Rewrite Map.Properties.F.remove_mapsto_iff : var_db.
-  #[global] Hint Rewrite Map.Properties.F.empty_in_iff : var_db.
-
-  #[global] Hint Rewrite Map.Properties.F.remove_in_iff : var_db.
-  #[global] Hint Rewrite Map.Proofs.disjoint_add_1 : var_db.
-  #[global] Hint Rewrite Map.Proofs.disjoint_add_2 : var_db.
-
-  #[global] Existing Instance Map.Proofs.singletonProper.
-  #[global] Existing Instance Map.Proofs.concatProper.
-  #[global] Existing Instance Map.Proofs.domainProper.
-  #[global] Existing Instance Map.FSetProofs.setminusProper.
-
-  #[global] Hint Rewrite Map.Proofs.concat_find : var_db.
-  #[global] Hint Rewrite Map.Proofs.concat_in : var_db.
-  #[global] Hint Rewrite @Map.Proofs.concat_add_l : var_db.
-  #[global] Hint Rewrite @Map.Proofs.map_concat : var_db.
-  #[global] Hint Rewrite Map.Proofs.fset_in_union : var_db.
-  #[global] Hint Rewrite Map.Proofs.remove_map : var_db.
-  #[global] Hint Rewrite Map.Proofs.remove_add : var_db.
-  #[global] Hint Rewrite Map.Proofs.remove_empty : var_db.
-  #[global] Hint Rewrite @Map.Proofs.map_add : var_db.
-  #[global] Hint Resolve @Map.Proofs.empty_map_equal : var_db.
-  #[global] Hint Rewrite @Map.Proofs.empty_map_empty : var_db.
-  #[global] Hint Rewrite @Map.Proofs.concat_disjoint : var_db.
-  #[global] Hint Rewrite Map.Proofs.add_remove_eq : var_db.
-  #[global] Hint Rewrite Map.Proofs.add_add_eq : var_db.
-  #[global] Hint Rewrite Map.Proofs.singleton_empty : var_db.
-  #[global] Hint Rewrite Map.Proofs.remove_remove : var_db.
-
-  #[global] Hint Rewrite @Map.FSetProofs.setminus_mapsto_iff : var_db.
-  #[global] Hint Rewrite Map.FSetProofs.setminus_add : var_db.
-  #[global] Hint Rewrite Map.FSetProofs.setminus_singleton : var_db.
-  #[global] Hint Rewrite Map.FSetProofs.find_setminus : var_db.
-  #[global] Hint Rewrite Map.FSetProofs.add_mem_iff : var_db.
-  #[global] Hint Rewrite Map.FSetProofs.singleton_mem_iff : var_db.
-
-  (* separate out more expensive resolves into extra_var_db *)
-  #[global] Hint Resolve Map.empty_1 : var_db.  
-  #[global] Hint Resolve Map.Properties.Partition_sym : extra_var_db.
-  #[global] Hint Resolve @Map.Proofs.singleton_remove : var_db.
-  #[global] Hint Resolve Map.Proofs.add_mapsto : extra_var_db.
-  #[global] Hint Resolve Map.Proofs.disjoint_empty_1 Map.Proofs.disjoint_empty_2 : var_db.
-  #[global] Hint Resolve Map.Proofs.disjoint_in_l Map.Proofs.disjoint_in_r : var_db.
-  #[global] Hint Resolve Map.Proofs.partition_empty_l : var_db.
-  #[global] Hint Resolve Map.Proofs.partition_empty_r : var_db.
-  #[global] Hint Resolve Map.M.remove_1 : var_db.
-  #[global] Hint Resolve Map.Proofs.disjoint_sym : extra_var_db.
-  #[global] Hint Resolve Map.Proofs.concat_assoc : extra_var_db.
-
-  (*
-  #[global] Hint Extern 4 (Map.Partition (Map.concat _ _) _ _) => Map.Proofs.partition_concat : extra_var_db.
-  #[global] Hint Extern 4 (Map.Partition _ (Map.concat _ _) _) => Map.Tactics.partition_concat : extra_var_db.
-  #[global] Hint Extern 4 (Map.Partition _ _ (Map.concat _ _)) => Map.Tactics.partition_concat : extra_var_db.
-  *)
-
-  #[global] Hint Rewrite Map.FSetProperties.inter_iff : var_db.
-  #[global] Hint Rewrite Map.MProofs.FSetProperties.add_iff: var_db.
-  #[global] Hint Rewrite Map.FSetProperties.singleton_iff : var_db.
-  #[global] Hint Rewrite Map.FSetProperties.add_iff : var_db.
-  #[global] Hint Rewrite Map.FSetProperties.remove_iff : var_db.
-
-  (** Proofs about fresh variables *)
-
-  (* The operations on configurations form Proper relations *)
-  Global Instance freshProper : forall A, 
-      Proper (@Var.Map.Equal A ==> eq) Var.fresh.
-  Proof.
-
-    intros A refs1 refs2 Hrefs.
-    unfold Var.fresh.
-    apply Var.Map.Properties.fold_Equal; auto.
-    + intros ? ? ? ? ? ? ? ? ?; subst; auto.
-      repeat rewrite H1. reflexivity.
-    + intros ? ? ? ? ? ?.
-    
-      destruct (k' + 1 <=? k) eqn:H_k'_k;
-      destruct (a <=? k') eqn:Hk';
-      destruct (a <=? k) eqn:Hk;
-      destruct (k+1 <=? k') eqn:H_k_k';
-      auto;
-        try 
-        (try rewrite Nat.leb_le in *;
-        try rewrite Nat.leb_nle in *;
-        lia).
-      * rewrite H_k'_k; auto. reflexivity.
-      * reflexivity.
-      * rewrite Hk'; reflexivity.
-      * rewrite H_k'_k; reflexivity.
-      * rewrite H_k'_k; auto. rewrite Hk'; auto. reflexivity.
-      * rewrite Hk'; auto. reflexivity.
-  Qed.   
-
-  Lemma fresh_empty : forall T,
-    Var.fresh (Var.Map.empty T) = 0%nat.
-  Proof.
-    intros. unfold Var.fresh.
-    rewrite Var.Map.Properties.fold_spec_right.
-    simpl.
-    auto.
-  Qed.
-
-  Lemma fresh_add : forall T (m : Var.Map.t T) x v,
-    ~ Var.Map.In x m ->
-    Var.fresh (Var.Map.add x v m) = max (x+1) (Var.fresh m).
-  Proof.
-    intros.
-    unfold Var.fresh.
-    rewrite Var.Map.Properties.fold_add; auto.
-    
-    + fold (Var.fresh m).
-      destruct (PeanoNat.Nat.leb (Var.fresh m) x) eqn:Hleb.
-      - apply PeanoNat.Nat.leb_le in Hleb.
-        rewrite max_l; auto.
-        lia.
-
-      - rewrite PeanoNat.Nat.leb_nle in Hleb.
-        rewrite max_r; auto.
-        lia.
-
-    + clear m x v H.
-      intros ? x ? ? ? ? ? z ?; subst; auto.
-    + clear m x v H.
-      intros z1 z2 v1 v2 w Hneq.
-      repeat match goal with
-      | [ H : context[PeanoNat.Nat.leb ?x ?y] |- _ ] =>
-        let H := fresh "H" in
-        destruct (PeanoNat.Nat.leb x y) eqn:H;
-        try rewrite PeanoNat.Nat.leb_le in *;
-        try rewrite PeanoNat.Nat.leb_nle in *
-      | [ |- context[PeanoNat.Nat.leb ?x ?y] ] =>
-        let H := fresh "H" in
-        destruct (PeanoNat.Nat.leb x y) eqn:H;
-        try rewrite PeanoNat.Nat.leb_le in *;
-        try rewrite PeanoNat.Nat.leb_nle in *
-      end;
-      try lia.
-  Qed.
-
-  Lemma fresh_upper_bound : forall T (m : Var.Map.t T),
-    forall x, Var.Map.In x m ->
-      (Var.fresh m > x)%nat.
-  Proof.
-    intros T m.
-    induction m using Var.Map.Properties.map_induction;
-      intros y Hin.
-    * Var.simplify.
-    * Var.simplify.
-      rewrite fresh_add; auto.
-      destruct Hin; subst.
-      { try lia. }
-      apply IHm1 in H0. lia. 
-  Qed.
-
-  Lemma fresh_not_in : forall T (m : Var.Map.t T) x,
-    x = Var.fresh m ->
-    ~ Var.Map.In x m.
-  Proof.
-    intros. subst.
-    intros Hin.
-    apply fresh_upper_bound in Hin.
-    lia.
-  Qed.
-
-
-End Var.
-
-(* Rotation angles are rational multiples of π: [RZ (1#4)] rotates by π/4. *)
-Inductive unitary :=
-| H | X | Y | Z | CNOT | SGATE | Sdag | CS | TGATE | Tdag | CT | CTdag | CSdag
-| RZ  : QArith_base.Q -> unitary
-| CRZ : QArith_base.Q -> unitary.
-
-(** Z-rotation by a·π, including its global phase, which matters once
-    controlled. (QuantumLib's [phase_shift] is equal only up to global phase.) *)
-Definition rz (a : QArith_base.Q) : Matrix 2 2 :=
-  let θ := (Q2R a * PI)%R in
-  fun x y => match x, y with
-          | 0, 0 => Cexp (- θ / 2)
-          | 1, 1 => Cexp (θ / 2)
-          | _, _ => C0
-          end.
-
-Lemma WF_rz : forall a, WF_Matrix (rz a).
-Proof. intros. show_wf. Qed.
-#[export] Hint Resolve WF_rz : wf_db.
-
-
-Module Config.
-  
-  Record t := {
-    dim : nat;
-    (*qrefs : Var.Map.t nat;*)
-    qstate : Matrix (Nat.pow 2 dim) (Nat.pow 2 dim)
-  }.
-
-
-  Record WellScoped (refs : Var.Map.t nat) (cfg : t) := {
-    wf_qstate : Matrix.WF_Matrix (qstate cfg);
-    (*wf_qrefs : List.Forall
-              (fun x => snd x < dim cfg)%nat
-              (Var.Map.elements refs)
-              *)
-    wf_qrefs : forall x, Var.Map.In x refs -> (x < dim cfg)%nat
-  }.
-
-  
-    Definition find (x : Var.t) refs : nat :=
-      match Var.Map.find x refs with
-      | Some q => q
-      | None   => 0%nat
-      end.
-      
-
-
-  (* Project onto the state where qubit q is in the classical state |b> *)
-  (*Definition proj q dim (b : bool) := pad_u dim q (bool_to_matrix b).*)
-  Definition measure (b : bool) (x : Var.t) refs (cfg : t)
-    : Var.Map.t nat * t :=
-    let q := find x refs in
-    let rho' := super (pad_u (dim cfg) q (bool_to_matrix b)) (qstate cfg) in
-    (Var.Map.remove x refs, {|
-      dim := dim cfg;
-      qstate := rho'
-    |}).
-
-  Definition new (b : bool) refs (cfg : t) : Var.t * Var.Map.t nat * t :=
-    (*let x := Var.fresh refs in*)
-    let x := dim cfg in (* don't want x to depend on refs *)
-    let q := dim cfg in
-    let rho' := kron (qstate cfg) (bool_to_ket b × (bool_to_ket b)†) in
-    (x, Var.Map.add x q refs, {|
-      dim := 1 + dim cfg;
-      qstate := rho'
-    |}).
-
-  Definition apply_matrix (cfg : t) (U : Matrix (2 ^ dim cfg) (2 ^ dim cfg)) : t :=
-  {|
-    dim := dim cfg;
-    qstate := super U (qstate cfg)
-  |}.
-  
-  (**
-    Inputs:
-      - refs : an assignment of variables in indices in cfg
-      - cfg : a configuration of dimension d
-    Returns:
-      - a fresh variable x
-      - an updated map that includes refs along with x |-> d
-      - an updated configuration where the dimension has been incremented to d+1
-    Note that the quantum state inside the resulting configuration still has dimension d, and will need to be incremented.
-  *)
-  Definition fresh_var (refs : Var.Map.t nat) (cfg : t) : Var.t * Var.Map.t nat * t :=
-    let d := dim cfg in
-    let x := Var.fresh refs in
-    let refs' := Var.Map.add x d refs in
-    let cfg' := {| dim := 1 + dim cfg; qstate := qstate cfg |} in
-    (x, refs', cfg').
-
-  Definition epr_cfg cfg : nat * nat * t :=
-    let d := dim cfg in
-    let bell00 := Quantum.EPRpair × (Quantum.EPRpair †) in
-    let rho' := kron (qstate cfg) bell00 in
-    (d, 1+d, {|
-      dim := 2 + dim cfg;
-      qstate := rho'
-    |})%nat.
-
-  Definition epr refs (cfg : t) : Var.t * Var.t * Var.Map.t nat * t :=
-    match epr_cfg cfg with
-    | (idx1, idx2, cfg') =>
-      let x1 := (*Var.fresh refs*) idx1 in (* don't want x1 to depend on refs *)
-      let refs' := Var.Map.add x1 idx1 refs in
-      let x2 := (*Var.fresh refs'*) idx2 in (* don't want x2 to depend on refs*)
-      let refs'' := Var.Map.add x2 idx2 refs' in
-      (x1, x2, refs'', cfg')
-    end.
-
-
-  Definition gate_to_matrix (n : nat) (U : unitary) (qs : list nat) : Matrix (2^n) (2^n) :=
-  match U, qs with
-  | H, [q] => @pad 1 q n Quantum.hadamard
-  | X, [q] => @pad 1 q n Quantum.σx
-  | Y, [q] => @pad 1 q n Quantum.σy
-  | Z, [q] => @pad 1 q n Quantum.σz
-  | CNOT, [q1; q2] => pad_ctrl n q1 q2 Quantum.σx
-  | CS, [q1; q2] => pad_ctrl n q1 q2 Quantum.Sgate
-  | CT, [q1; q2] => pad_ctrl n q1 q2 Quantum.Tgate
-  | CSdag, [q1; q2] => pad_ctrl n q1 q2 Quantum.Sgate†
-  | CTdag, [q1; q2] => pad_ctrl n q1 q2 Quantum.Tgate†
-  | SGATE, [q] => @pad 1 q n Quantum.Sgate
-  | Sdag, [q]  => @pad 1 q n Quantum.Sgate†
-  | TGATE, [q] => @pad 1 q n Quantum.Tgate
-  | Tdag, [q]  => @pad 1 q n Quantum.Tgate†
-  | RZ a, [q]  => @pad 1 q n (rz a)
-  | CRZ a, [q1; q2] => pad_ctrl n q1 q2 (rz a)
-  | _, _ => Zero
-  end.
-
-  Definition apply_gate (U : unitary) (xs : list Var.t) refs (cfg : t) : t :=
-    let qs := List.map (fun x => find x refs) xs in
-    apply_matrix cfg (gate_to_matrix _ U qs).
-
-  (*
-  Lemma test1 : gate_to_matrix 2 CNOT [0;1]%nat = cnot.
-  Proof.
-    assert (H : WF_Matrix (gate_to_matrix 2 CNOT [0%nat; 1%nat])).
-    { simpl.
-      set (H0 := QuantumLib.Pad.WF_pad_ctrl 2 0 1 σx).
-      apply H0.
-      auto with wf_db.
-    }
-    prep_matrix_equality.
-    destruct x as [ | [ | [ | [ | x ]]]];
-    destruct y as [ | [ | [ | [ | y ]]]];
-      try (rewrite H; [ auto | right; simpl; lia]; fail);
-      try (rewrite H; [ auto | left; simpl; lia]; fail);
-      try lca.
-  Qed.
-
-  Lemma test2 :gate_to_matrix 1 H [0]%nat = hadamard.
-  Proof.
-    simpl. unfold pad. simpl. Msimpl; auto.
-  Qed.
-  *)
-
-  (* Properties of well-scopedness*)
-
-  Global Instance WellScopedProper : Proper (Var.Map.Equal ==> eq ==> iff) Config.WellScoped.
-  Proof.
-    intros refs1 refs2 Hrefs cfg1 cfg2 Hcfg; subst.
-    split; intros [wf_qstate wf_qrefs].
-    + split; auto;
-      intros x; setoid_rewrite <- Hrefs; auto.
-    + split; auto;
-      intros x; setoid_rewrite Hrefs; auto.
-  Qed.
-
-  Lemma WellScoped_concat : forall Θ1 Θ2 cfg,
-    WellScoped (Var.Map.concat Θ1 Θ2) cfg 
-    <->
-    WellScoped Θ1 cfg /\ Config.WellScoped Θ2 cfg.
-  Proof.
-    intros ? ? ?.
-    split.
-    + intros [wf ws].
-      split; split; auto;
-      intros x Hin; apply ws;
-      autorewrite with var_db; auto.
-    + intros [[wf ws1] [_ ws2]].
-      split; auto.
-      intros x Hin. autorewrite with var_db in Hin.
-      destruct Hin as [Hin | Hin];
-        [apply ws1 | apply ws2]; auto.
-  Qed.
-  #[global] Hint Rewrite WellScoped_concat : var_db.
-
-  Lemma WellScoped_empty : forall cfg,
-    WF_Matrix (qstate cfg) ->
-    WellScoped (Var.Map.empty nat) cfg.
-  Proof.
-    intros cfg HWF.
-    split; auto.
-    intros z Hin.
-    autorewrite with var_db in *.
-    contradiction.
-  Qed.
-
-  Global Instance findProper : Proper (eq ==> Var.Map.Equal ==> eq) find.
-  Proof.
-    intros x' x Hx refs1 refs2 Hrefs; subst.
-    unfold Config.find. rewrite Hrefs; auto.
-  Qed.
-
-  Lemma measure_Proper : forall b x cfg refs1 refs2 refs1' refs2' cfg1' cfg2',
-    Var.Map.Equal refs1 refs2 ->
-    measure b x refs1 cfg = (refs1', cfg1') ->
-    measure b x refs2 cfg = (refs2', cfg2') ->
-    Var.Map.Equal refs1' refs2' /\ cfg1' = cfg2'.
-  Proof.
-    intros ? ? ? ? ? ? ? ? ?.
-    intros Heq Hmeas1 Hmeas2.
-    inversion Hmeas1; inversion Hmeas2; subst; clear Hmeas1 Hmeas2.
-    split.
-    + rewrite Heq. reflexivity.
-    + unfold find. rewrite Heq. reflexivity.
-  Qed.
-
-  Global Instance measureProper :
-    Proper (eq ==> eq ==> Var.Map.Equal ==> eq ==>
-      RelationPairs.RelProd Var.Map.Equal eq)
-      measure.
-  Proof.
-    intros ? b ? ? x ? refs1 refs2 Hrefs ? cfg ?;
-      subst.
-    
-    eapply (measure_Proper b x cfg) in Hrefs;
-      try reflexivity.
-    destruct Hrefs as [Heq Heq'].
-    split; unfold RelationPairs.RelCompFun;
-      simpl; auto.
-  Qed.
-
-  Global Instance newProper :
-    Proper (eq ==> Var.Map.Equal ==> eq ==>
-      RelationPairs.RelProd (RelationPairs.RelProd eq Var.Map.Equal) eq)
-      new.
-  Proof.
-    intros ? b ? refs1 refs2 Hrefs ? cfg ?; subst.
-    repeat split; unfold RelationPairs.RelCompFun;
-      simpl; auto.
-    rewrite Hrefs; reflexivity.
-  Qed.
-
-  Global Instance eprProper :
-    Proper (Var.Map.Equal ==> eq ==>
-      RelationPairs.RelProd
-      (RelationPairs.RelProd eq Var.Map.Equal)
-      eq)
-      epr.
-  Proof.
-    intros refs1 refs2 Hrefs ? cfg ?; subst;
-    repeat split; unfold RelationPairs.RelCompFun;
-      simpl; auto.
-    * rewrite Hrefs; auto. reflexivity.
-  Qed. 
-
-  Global Instance apply_gate_Proper :
-    Proper (eq ==> eq ==> Var.Map.Equal ==> eq ==> eq) apply_gate.
-  Proof.
-    intros g' g Hg ls' ls Hls refs1 refs2 Hrefs cfg1 cfg2 Hcfg;
-      subst.
-    unfold Config.apply_gate.
-    f_equal. f_equal.
-    apply Proper_map; auto.
-    intros x. rewrite Hrefs; auto.
-  Qed.
-
-  Lemma WellScoped_monotonic : forall cfg cfg' Theta Theta',
-    WellScoped Theta cfg ->
-    WellScoped Theta' cfg' ->
-    (dim cfg <= dim cfg')%nat ->
-    WellScoped Theta cfg'.
-  Proof.
-    intros ? ? ? ? HWS HWS' Hdim.
-    destruct HWS; destruct HWS'.
-    split; auto.
-    intros x Hin.
-    specialize (wf_qrefs0 x Hin). lia.
-  Qed.
-
-
-End Config.
-
-(* This could be instantiated in different ways. *)
-
-Module Actor.
-
-
-  Lemma bool_dec_refl : forall (b : bool), bool_dec b b = left (eq_refl b).
-  Proof. destruct b; auto. Qed.
-  Lemma ascii_dec_refl : forall (a : Ascii.ascii), Ascii.ascii_dec a a = left (eq_refl a).
-  Proof.
-    destruct a. simpl.
-    repeat rewrite bool_dec_refl.
-    simpl.
-    reflexivity.
-  Qed.
-
-
-  Module V := OrderedTypeEx.UOT_to_OT (OrderedTypeEx.String_as_OT).
-  Include V.
-  
-  Module Map := FMap(V).
-  Module FSet := Map.S.
-
-  Ltac simplify :=
-    repeat
-    (autorewrite with actor_db in *;
-      Map.Tactics.vsimpl;
-      repeat Map.Tactics.reduce_eq_dec;
-      try (first [tauto | reflexivity | discriminate | auto | intuition]; fail)).
-
-  (* instantiate this for each relevant hint database *)
-  Ltac reflect_find :=
-    repeat (
-      Map.Proofs.reflect_find_body;
-      autorewrite with actor_db in *;
-      repeat Map.Tactics.reduce_eq_dec
-    ).
-  Ltac solve := 
-    repeat (reflect_find; first [tauto | discriminate | auto; fail | intuition]).
-
-  (*  #[global] Existing Instance MapProofs.F.EqualSetoid.*)
-  
-  (* Global actor_db hints: instantiations of FMap_fun's local qoreo_db hints for Actor.Map *)
-  #[global] Hint Rewrite Map.Properties.F.add_mapsto_iff : actor_db.
-  #[global] Hint Rewrite Map.Properties.F.empty_mapsto_iff : actor_db.
-  #[global] Hint Rewrite Map.Properties.F.add_in_iff : actor_db.
-  #[global] Hint Rewrite Map.Properties.F.map_o : actor_db.
-  #[global] Hint Rewrite Map.Properties.F.remove_o : actor_db.
-  #[global] Hint Rewrite Map.Properties.F.add_o : actor_db.
-  #[global] Hint Rewrite Map.Properties.F.empty_o : actor_db.
-  #[global] Hint Rewrite Map.Properties.F.map_in_iff : actor_db.
-  #[global] Hint Rewrite Map.Properties.F.remove_mapsto_iff : actor_db.
-  #[global] Hint Rewrite Map.Properties.F.empty_in_iff : actor_db.
-
-  #[global] Hint Resolve Map.empty_1 : actor_db.
-  #[global] Hint Resolve Map.Properties.Partition_sym : actor_db.
-  #[global] Hint Rewrite Map.Properties.F.remove_in_iff : actor_db.
-  #[global] Hint Rewrite Map.Proofs.disjoint_add_1 : actor_db.
-  #[global] Hint Rewrite Map.Proofs.disjoint_add_2 : actor_db.
-
-  #[global] Existing Instance Map.Proofs.singletonProper.
-  #[global] Existing Instance Map.Proofs.concatProper.
-  #[global] Existing Instance Map.Proofs.domainProper.
-  #[global] Existing Instance Map.FSetProofs.setminusProper.
-
-  #[global] Hint Rewrite Map.Proofs.concat_find : actor_db.
-  #[global] Hint Rewrite Map.Proofs.concat_in : actor_db.
-  #[global] Hint Rewrite @Map.Proofs.concat_add_l : actor_db.
-  #[global] Hint Rewrite @Map.Proofs.map_concat : actor_db.
-  #[global] Hint Rewrite Map.Proofs.fset_in_union : actor_db.
-  #[global] Hint Rewrite Map.Proofs.remove_map : actor_db.
-  #[global] Hint Rewrite Map.Proofs.remove_add : actor_db.
-  #[global] Hint Rewrite Map.Proofs.remove_empty : actor_db.
-  #[global] Hint Rewrite @Map.Proofs.map_add : actor_db.
-  #[global] Hint Resolve @Map.Proofs.empty_map_equal : actor_db.
-  #[global] Hint Rewrite @Map.Proofs.empty_map_empty : actor_db.
-  #[global] Hint Resolve @Map.Proofs.singleton_remove : actor_db.
-  #[global] Hint Rewrite @Map.Proofs.concat_disjoint : actor_db.
-  #[global] Hint Rewrite Map.Proofs.add_remove_eq : actor_db.
-  #[global] Hint Rewrite Map.Proofs.add_add_eq : actor_db.
-  #[global] Hint Rewrite Map.Proofs.singleton_empty : actor_db.
-  #[global] Hint Rewrite Map.Proofs.remove_remove : actor_db.
-
-  #[global] Hint Rewrite @Map.FSetProofs.setminus_mapsto_iff : actor_db.
-  #[global] Hint Rewrite Map.FSetProofs.setminus_add : actor_db.
-  #[global] Hint Rewrite Map.FSetProofs.setminus_singleton : actor_db.
-  #[global] Hint Rewrite Map.FSetProofs.find_setminus : actor_db.
-  #[global] Hint Rewrite Map.FSetProofs.add_mem_iff : actor_db.
-  #[global] Hint Rewrite Map.FSetProofs.singleton_mem_iff : actor_db.
-
-  #[global] Hint Resolve Map.Proofs.add_mapsto : actor_db.
-  #[global] Hint Resolve Map.Proofs.disjoint_empty_1 Map.Proofs.disjoint_empty_2 : actor_db.
-  #[global] Hint Resolve Map.Proofs.disjoint_in_l Map.Proofs.disjoint_in_r : actor_db.
-  #[global] Hint Resolve Map.Proofs.partition_empty_l : actor_db.
-  #[global] Hint Resolve Map.Proofs.partition_empty_r : actor_db.
-  #[global] Hint Resolve Map.M.remove_1 : actor_db.
-  #[global] Hint Resolve Map.Proofs.disjoint_sym : actor_db.
-  #[global] Hint Resolve Map.Proofs.concat_assoc : actor_db.
-
-  (*
-  #[global] Hint Extern 4 (Map.Partition (Map.concat _ _) _ _) => Map.Proofs.partition_concat : actor_db.
-  #[global] Hint Extern 4 (Map.Partition _ (Map.concat _ _) _) => Map.Tactics.partition_concat : actor_db.
-  #[global] Hint Extern 4 (Map.Partition _ _ (Map.concat _ _)) => Map.Tactics.partition_concat : actor_db.
-  *)
-
-  #[global] Hint Rewrite Map.FSetProperties.inter_iff : actor_db.
-  #[global] Hint Rewrite Map.MProofs.FSetProperties.add_iff: actor_db.
-  #[global] Hint Rewrite Map.FSetProperties.singleton_iff : actor_db.
-  #[global] Hint Rewrite Map.FSetProperties.add_iff : actor_db.
-  #[global] Hint Rewrite Map.FSetProperties.remove_iff : actor_db.
-
-End Actor.
-
-
-Module ChorEnv.
-    Definition t T := Actor.Map.t (Var.Map.t T).
-    
-    Definition find {T} (A : Actor.t) (G : t T) : Var.Map.t T :=
-        match Actor.Map.find A G with
-        | Some D => D
-        | None => Var.Map.empty _
-        end.
-
-    Definition empty {T} : ChorEnv.t T := Actor.Map.empty _.
-
-    (* equivalence of ChorEnv.t *)
-    Definition Equal {T} (G1 G2 : t T) : Prop := 
-    (*Actor.Map.Equiv (Var.Map.Equal) G1 G2.*)
-      forall A, Var.Map.Equal (find A G1) (find A G2).
-
-    Definition Empty {T} (G : t T) : Prop :=
-      forall A, Var.Map.Equal (find A G) (Var.Map.empty _).
-
-    Definition add {T} (A : Actor.t) (x : Var.t) (tau : T) (G : t T) : t T :=
-        let D := find A G in
-        Actor.Map.add A (Var.Map.add x tau D) G.
-
-
-    Definition remove {T} (A : Actor.t) (x : Var.t) (CE : t T) :  t T :=
-        (Actor.Map.add A (Var.Map.remove x (find A CE)) CE).
-
-    Definition MapsTo {T} (A : Actor.t) (x : Var.t) (tau : T) (G : t T) : Prop :=
-      Var.Map.MapsTo x tau (find A G).
-
-
-    Definition WellScoped (T : ChorEnv.t nat) (cfg : Config.t) : Prop :=
-      forall A, Config.WellScoped (ChorEnv.find A T) cfg.
-
-    
-    Definition epr (A B : Actor.t) (refs : t nat) (cfg : Config.t)
-                  : Var.t * Var.t * t nat * Config.t :=
-      match Config.epr_cfg cfg with
-      | (idx1, idx2, cfg') =>
-        let x1 := (* Var.fresh (find A refs) in*) idx1 in
-        let refs' := add A x1 idx1 refs in
-        let x2 := (*Var.fresh (find B refs') in*) idx2 in
-        let refs'' := add B x2 idx2 refs' in
-
-        (x1, x2, refs'', cfg')
-      end.
-
-    Ltac simplify := repeat (Actor.simplify; Var.simplify).
-
-
-    (** properties of find *)
-
-    Lemma find_add : forall T A B x (a : T) G,
-      (ChorEnv.find A (ChorEnv.add B x a G))
-      = (if Actor.eq_dec A B then Var.Map.add x a (ChorEnv.find A G) else ChorEnv.find A G).
-    Proof.
-      intros.
-      unfold ChorEnv.add, ChorEnv.find.
-      autorewrite with actor_db.
-      repeat Actor.Map.Tactics.reduce_eq_dec.
-      + destruct (Actor.Map.find B G); try reflexivity.
-      + destruct (Actor.Map.find B G); try reflexivity.
-    Qed.
-    #[global] Hint Rewrite find_add : var_db.
-
-
-    Lemma find_add' : forall {T} A B M (M' : t T),
-      (find A (Actor.Map.add B M M'))
-      = (if Actor.eq_dec A B then M else find A M').
-    Proof.
-      intros.
-      unfold find.
-      Actor.simplify.
-    Qed.
-    #[global] Hint Rewrite @find_add' : var_db.
-
-    Lemma find_remove : forall {T} A B x (G : t T),
-      (find A (ChorEnv.remove B x G))
-      = (if Actor.eq_dec A B then Var.Map.remove x (find B G) else find A G).
-    Proof.
-      intros.
-      unfold find. unfold remove.
-      autorewrite with actor_db.
-      repeat Actor.Map.Tactics.reduce_eq_dec; try reflexivity.
-    Qed.
-    #[global] Hint Rewrite @find_remove : var_db.
-
-    Lemma find_remove' : forall T A B (G : t T),
-      (find A (Actor.Map.remove B G))
-      = if Actor.eq_dec A B then Var.Map.empty _ else find A G.
-    Proof.
-      intros T A B G.
-      unfold find. Actor.simplify.
-    Qed.
-    #[global] Hint Rewrite find_remove' : var_db.
-
-    Global Instance findProper : forall T, Proper (eq ==> Equal ==> Var.Map.Equal) (@find T).
-    Proof.
-      intros T ? A ? env1 env2 Henv; subst.
-      unfold Equal in Henv.
-      apply Henv.
-    Qed.
-
-    Lemma find_concat : forall A T (M1 M2 : t T),
-      find A (Actor.Map.concat M1 M2) =
-        match Actor.Map.find A M1 with
-        | Some D1 => D1
-        | None => find A M2
-        end.
-    Proof.
-      intros. unfold find.
-      Actor.simplify.
-      destruct (Actor.Map.find A M1); auto.
-    Qed.
-    #[global] Hint Rewrite find_concat : var_db.
-
-    Lemma find_setminus : forall A X T (M : t T),
-      find A (Actor.Map.setminus X M)
-      = if Actor.Map.FSetProofs.in_dec A X
-        then Var.Map.empty _
-        else find A M.
-  Proof.
-    intros.
-    unfold find.
-    Actor.simplify.
-    destruct (Actor.Map.FSetProofs.in_dec A X0); auto.
-  Qed.
-  #[global] Hint Rewrite find_setminus : var_db.
-
-  Lemma mapsto_find : forall T A D (M : t T),
-    Actor.Map.MapsTo A D M ->
-    find A M = D.
-  Proof.
-    intros T A D M H.
-    Actor.reflect_find.
-    unfold find.
-    rewrite H. auto.
-  Qed.
-
-  Lemma find_empty : forall T A,
-    find A (Actor.Map.empty (Var.Map.t T)) = Var.Map.empty _.
-  Proof.
-    intros.
-    unfold find. Actor.simplify.
-  Qed.
-  #[global] Hint Rewrite find_empty : var_db.
-
-
-    (** Properties of ChorEnv.add *)
-      
-    Global Instance add_Proper : forall T, Proper (eq ==> eq ==> eq ==> Equal ==> Equal) (@add T).
-    Proof.
-      intros T ? A ? ? x ? ? tau ? G1 G2 HG; subst.
-      unfold add.
-      unfold Equal in *. intros B.
-      simplify.
-      rewrite HG.
-      reflexivity.
-    Qed.
-
-    Global Instance actor_add_Proper : forall T, 
-      Proper  (eq ==> @Var.Map.Equal T ==> Equal ==> @Equal T)
-              (@Actor.Map.add (Var.Map.t T)).
-    Proof.
-      intros T ? A ? D1 D2 HD T1 T2 HT; subst.
-      intros B.
-      Var.simplify.
-      Actor.Map.Tactics.compare B A; auto.
-    Qed.
-
-  (* singleton, concat, domain, setminus, remove, add, In, MapsTo, empty, Empty, disjoint, partition *)
-
-    (* Properties of Equal *)
-
-    Global Instance Equal_refl : forall T, Reflexive (@Equal T).
-    Proof.
-      intros T x.
-      intros B. reflexivity.
-    Qed.
-
-    Global Instance Equal_symm : forall T, Symmetric (@Equal T).
-    Proof.
-      intros T env1 env2 Heq.
-      intros B. symmetry. apply Heq.
-    Qed.
-
-    Global Instance Equal_trans : forall T, Transitive (@Equal T).
-    Proof.
-      intros T env1 env2 env3 H1 H2.
-      intros B.
-      rewrite H1. apply H2.
-    Qed.
-
-    Lemma actor_map_Equal : forall T (M1 M2 : t T),
-      Actor.Map.Equal M1 M2 -> Equal M1 M2.
-    Proof.
-      intros T M1 M2 Heq.
-      intros B. unfold find.
-      rewrite Heq. reflexivity.
-    Qed.
-
-    Lemma actor_map_Equal' : forall T (M1 M2 N1 N2 : t T),
-      Actor.Map.Equal M1 M2 ->
-      Actor.Map.Equal N1 N2 ->
-      Equal M1 N1 ->
-      Equal M2 N2.
-    Proof.
-      intros T M1 M2 N1 N2 HeqM HeqN Heq.
-      apply actor_map_Equal in HeqM.
-      apply actor_map_Equal in HeqN.
-      rewrite <- HeqM.
-      rewrite <- HeqN.
-      auto.
-    Qed.
-
-    Global Instance Equal_Proper : forall T, Proper (Actor.Map.Equal ==> Actor.Map.Equal ==> iff) (@Equal T).
-    Proof.
-      intros T M1 M2 HM N1 N2 HN.
-      split; intros.
-      eapply actor_map_Equal'; eauto.
-      eapply actor_map_Equal'; eauto; symmetry; auto.
-    Qed.
-
-    (** Properties of remove *)
-
-    Global Instance remove_Proper : forall T, Proper (eq ==> eq ==> Equal ==> Equal) (@remove T).
-    Proof.
-      intros T ? A ? ? x ? G1 G2 HG; subst.
-      unfold remove.
-      unfold Equal in *. intros B.
-      simplify.
-      rewrite HG.
-      reflexivity.
-    Qed.
-
-
-    Global Instance actor_remove_Proper : forall T, 
-      Proper  (eq ==> Equal ==> @Equal T)
-              (@Actor.Map.remove (Var.Map.t T)).
-    Proof.
-      intros T ? A ? T1 T2 HT; subst.
-      intros B.
-      Var.simplify.
-      Actor.Map.Tactics.compare B A; auto.
-      reflexivity.
-    Qed.
-
-    (** Properties of MapsTo *)
-
-    Global Instance MapsTo_Proper : forall T,
-        Proper (eq ==> eq ==> eq ==> Equal ==> iff) (@MapsTo T).
-    Proof.
-      intros T ? A ? ? x ? ? tau ? G1 G2 HG; subst.
-      unfold MapsTo.
-      rewrite HG.
-      reflexivity.
-    Qed.
-
-    Lemma MapsTo_add : forall T A x (tau : T) G,
-      ChorEnv.MapsTo A x tau G ->
-      ChorEnv.Equal (ChorEnv.add A x tau G)
-                    G.
-    Proof.
-      intros T A x tau G H.
-      unfold ChorEnv.Equal.
-      unfold Actor.Map.Equiv, ChorEnv.add, ChorEnv.MapsTo, ChorEnv.find in *.
-      intros B.
-      Actor.simplify.
-      destruct (Actor.Map.find A G) as [D | ] eqn:Hfind;
-        Var.simplify.
-      Var.solve.
-    Qed.
-
-
-    (* singleton, concat, domain, setminus, remove, add, In, MapsTo, empty, Empty, disjoint, partition *)
-
-
-
-    (* ChorEnv + singleton *)
-
-
-  (** Facts about Empty *)
-
-    Lemma Empty_empty : forall T (G : t T),
-      Empty G ->
-      Equal G (Actor.Map.empty _).
-    Proof.
-      intros T G H. unfold Empty in H. unfold Equal.
-      intros A. rewrite H.
-      rewrite find_empty.
-      reflexivity.
-    Qed.
-
-    Lemma Empty_find : forall T (G : t T) A,
-      Empty G ->
-      Var.Map.Equal (find A G) (Var.Map.empty _).
-    Proof.
-      intros T G A H. apply H.
-    Qed.
-
-  Global Instance EmptyProper : forall T,
-    Proper (ChorEnv.Equal ==> iff) (@ChorEnv.Empty T).
-  Proof.
-    intros T G1 G2 HG.
-    split; intros Hempty.
-    * intros A. rewrite <- HG. auto.
-    * intros A. rewrite HG. auto.
-  Qed.
-
-  (* Interaction between add/remove/empty*)
-
-    Lemma ce_add_empty : forall T (m : ChorEnv.t T) A,
-      ChorEnv.Equal
-        (Actor.Map.add A (Var.Map.empty _) m)
-        (Actor.Map.remove A m).
-    Proof.
-      intros T m A.
-      intros B. ChorEnv.simplify.
-    Qed.
-    #[global] Hint Rewrite ce_add_empty : var_db.
-
-    Lemma addadd1 : forall {T} A (D : ChorEnv.t T) Delta x tau,
-        ChorEnv.Equal (Actor.Map.add A Delta (ChorEnv.add A x tau D)) (Actor.Map.add A Delta D).
-    Proof.
-      intros.
-      unfold ChorEnv.add.
-      Actor.simplify. 
-    Qed.
-    #[global] Hint Rewrite @addadd1 : var_db.
-
-    Lemma addadd2 : forall {X : Type} A (T : ChorEnv.t X) Theta1 Theta2,
-        ChorEnv.Equal (Actor.Map.add A Theta1 (Actor.Map.add A Theta2 T)) 
-                      (Actor.Map.add A Theta1 T).
-    Proof.
-      intros.
-      Actor.simplify.
-    Qed.
-    #[global] Hint Rewrite @addadd2 : var_db.
-
-
-    Lemma find_add_env : forall {X : Type} A (CE : ChorEnv.t X),
-        ChorEnv.Equal (Actor.Map.add A (ChorEnv.find A CE) CE) CE.
-    Proof.
-      intros X A CE B.
-      ChorEnv.simplify.
-    Qed.
-    #[global] Hint Rewrite @find_add_env : var_db.
-
-
-    Lemma remove_empty : forall A x T,
-      ChorEnv.Equal (ChorEnv.remove A x (Actor.Map.empty (Var.Map.t T))) (Actor.Map.empty _).
-    Proof.
-      intros. intros B. ChorEnv.simplify.
-    Qed.
-    #[global] Hint Rewrite remove_empty : var_db.
-
-
-    Lemma actor_remove_empty : forall A,
-        ChorEnv.Equal (Actor.Map.remove A (Actor.Map.empty (Var.Map.t nat))) (Actor.Map.empty _).
-    Proof. intros. ChorEnv.simplify. Qed.
-    #[global] Hint Rewrite actor_remove_empty : var_db.
-
-
-    Lemma ce_actor_add_neq_sym : forall A B X DA DB (T : ChorEnv.t X),
-      A <> B ->
-      ChorEnv.Equal (Actor.Map.add A DA (Actor.Map.add B DB T))
-                    (Actor.Map.add B DB (Actor.Map.add A DA T)).
-    Proof.
-      intros.
-      intros D.
-      ChorEnv.simplify.
-    Qed.
-
-
-    Lemma ce_actor_remove_add : forall {X} A D (m : ChorEnv.t X),
-      ChorEnv.Equal (Actor.Map.remove A (Actor.Map.add A D m))
-                    (Actor.Map.remove A m).
-    Proof.
-      intros. intros B. ChorEnv.simplify.
-    Qed.
-    #[global] Hint Rewrite @ce_actor_remove_add : var_db.
-
-
-  (* find, add, remove, mapsto, epr*)
-
-
-  Ltac reflect_find :=
-    repeat match goal with
-    | [ H : Actor.Map.MapsTo ?A ?D ?M |- _ ] =>
-      apply mapsto_find in H;
-      rewrite H in *
-    | [ H : Empty _ |- _ ] =>
-      apply Empty_empty in H;
-      rewrite H in *
-    | [ |- Empty _ ] =>
-      let A := fresh "A" in
-      intros A
-    | [ |- Equal _ _ ] =>
-      let A := fresh "A" in
-      intros A
-    end.
-  Ltac solve := reflect_find; simplify.
-
-  (** Properties of epr *)
-
-  
-  Lemma chor_epr_eq : forall T2 T1 T1' A B cfg cfg' q1 q2,
-    ChorEnv.epr A B T1 cfg = (q1, q2, T1', cfg') ->
-    ChorEnv.Equal T1 T2 ->
-    exists T2', ChorEnv.Equal T2' T1' /\ ChorEnv.epr A B T2 cfg = (q1, q2, T2', cfg').
-  Proof.
-    intros ? ? ? ? ? ? ? ? ? Hepr HT.
-    unfold epr in *.
-    destruct (Config.epr_cfg cfg) as [[q1' q2'] cfg0] eqn:Hcfg.
-    remember (Var.fresh (find A T2)) as x eqn:Hx.
-    replace (Var.fresh (find A T1)) with x in *.
-    2:{ subst. rewrite HT. auto. }
-    remember (Var.fresh (find B (add A x q1' T1))) as y eqn:Hy.
-    replace ((Var.fresh (find B (add A x q1' T2)))) with y in *.
-    2:{ subst. rewrite HT. auto. }
-
-    inversion Hepr; subst; clear Hepr.
-    eexists. split.
-    2:{ reflexivity. }
-    rewrite HT. reflexivity.
-  Qed.
-
-  Lemma epr_Proper : Proper (eq ==> eq ==> ChorEnv.Equal ==> eq ==> RelationPairs.RelProd (RelationPairs.RelProd eq ChorEnv.Equal) eq) ChorEnv.epr.
-  Proof.
-    intros ? A ? ? B ? T1 T2 HT ? cfg ?; subst.
-    unfold ChorEnv.epr.
-    split; split; simpl; unfold RelationPairs.RelCompFun; simpl; auto.
-    * rewrite HT. reflexivity.
-  Qed.
-
-
-    (** Properties of WellScoped *)
-
-
-    Global Instance WellScopedProper : Proper (ChorEnv.Equal ==> eq ==> iff) WellScoped.
-    Proof.
-      intros T1 T2 HT ? cfg ?; subst.
-      split; intros HWS;
-        intros A; specialize (HWS A);
-        specialize (HT A);
-        rewrite HT in *; auto.
-    Qed.
-
-
-    Lemma ws_partition : forall M M1 M2 cfg,
-        Config.WellScoped M cfg ->
-        Var.Map.Partition M M1 M2 ->
-        Config.WellScoped M1 cfg.
-    Proof.
-      intros M M1 M2 cfg [H H'] Hpart.
-      split; auto.
-      intros x Hin.
-      apply H'.
-      Var.Map.Tactics.reflect_partition.
-      Var.simplify.
-    Qed.
-
-
-    Lemma ws_partition_env : forall A T ThetaA1 ThetaA2 cfg,
-        WellScoped T cfg ->
-        Var.Map.Partition (ChorEnv.find A T) ThetaA1 ThetaA2 ->
-        WellScoped (Actor.Map.add A ThetaA1 T) cfg.
-    Proof.
-      intros A T ThetaA1 ThetaA2 cfg Hws Hpart.
-      intros B. ChorEnv.simplify.
-      eapply ws_partition; eauto.
-    Qed.
-
-
-    (*From QuantumLib Require Import Matrix Pad Quantum.*)
-    Lemma WF_Matrix_epr : forall A B T cfg q1 q2 T0 cfg',
-      ChorEnv.epr A B T cfg = (q1, q2, T0, cfg') ->
-      WF_Matrix (Config.qstate cfg) ->
-      WF_Matrix (Config.qstate cfg').
-    Proof.
-      intros A B T cfg q1 q2 T0 cfg' H HWF.
-      inversion H; subst; clear H. simpl.
-      assert (WF_Matrix EPRpair).
-      { apply WF_EPRpair. }
-      remember (EPRpair × (EPRpair †)) as rho eqn:Hrho.
-      assert (WF_Matrix rho).
-      { subst. auto with wf_db. }
-      apply WF_kron; auto.
-      {
-        repeat rewrite Nat.add_0_r.
-        repeat rewrite double_pow.
-        replace 4%nat with (2^2)%nat by auto.
-        rewrite <- Nat.pow_add_r.
-        f_equal.
-        lia.
-      }
-      {
-        repeat rewrite Nat.add_0_r.
-        repeat rewrite double_pow.
-        replace 4%nat with (2^2)%nat by auto.
-        rewrite <- Nat.pow_add_r.
-        f_equal.
-        lia.
-      }
-    Qed.
-  Close Scope R_scope.
-
-
-  Lemma WellScoped_epr : forall A B T cfg q1 q2 T0 cfg',
-    ChorEnv.epr A B T cfg = (q1, q2, T0, cfg') ->
-    A <> B ->
-    WellScoped T cfg ->
-    WellScoped T0 cfg'.
-  Proof.
-    intros A B T cfg q1 q2 T0 cfg' H Hneq HWS.
-    intros D.
-    specialize (HWS D).
-    destruct HWS as [HWF HWS].
-    split.
-    * eapply WF_Matrix_epr; eauto.
-    * intros y Hy.
-      inversion H; subst; clear H.
-      autorewrite with var_db in Hy.
-      Actor.Map.Tactics.compare D B; subst; simpl.
-      { (* D = B *)
-        ChorEnv.simplify.
-        destruct Hy as [Hy | Hy]; subst.
-        { (* y = S (dim cfg) *)
-          lia.
-        }
-        {
-          (* y ∈ find D T *)
-          apply HWS in Hy.
-          lia.
-        }
-      }
-      Actor.Map.Tactics.compare D A; subst; simpl.
-      { (* D = A *)
-        ChorEnv.simplify.
-        destruct Hy as [Hy | Hy]; subst.
-        { (* y = dim cfg *)
-          lia.
-        }
-        {
-          (* y ∈ find D T *)
-          apply HWS in Hy.
-          lia.
-        }
-      }
-      { (* D <> A, D <> B *)
-        apply HWS in Hy; auto.
-      }
-  Qed.
-
-
-End ChorEnv.

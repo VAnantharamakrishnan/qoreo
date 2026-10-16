@@ -1,10 +1,12 @@
 From Stdlib Require Import String.
-From Qoreo Require Import Base Expr Choreography.
-From QoreoExamples Require Import Notation.
+From Qoreo Require Import Base.Config Expr.Expr Expr.Proofs Choreography.Choreography Choreography.Proofs Network.Network NetQasm.
+Import Config.Unitary.
+From Qoreo.Choreography Require Import Notation.
 From Stdlib Require Import Lia.
 
 
 Open Scope string_scope.
+Open Scope list_scope.
 Open Scope example_scope.
 
 
@@ -16,7 +18,7 @@ Lemma WellTyped_teleport : forall Alice Bob q C,
   fresh_in_teleport q (* ensure q is fresh in teleport *) ->
   WellTyped ChorEnv.empty (ChorEnv.add Bob q QUBIT ChorEnv.empty) ChorEnv.empty C ->
   WellTyped ChorEnv.empty (ChorEnv.add Alice q QUBIT ChorEnv.empty) ChorEnv.empty
-    (mk (teleport Alice Bob q) ++ C)%list.
+    (Choreography.seq (mk (teleport Alice Bob q)) C).
 Proof.
   intros Alice Bob q C Hneq Hfresh HWT.
   remember (mk (teleport Alice Bob q)) as C0 eqn:HC0.
@@ -115,10 +117,10 @@ Proof.
     ChorEnv.simplify.
     solve_wt.
     { apply Expr.WTCVar; Var.simplify; eauto with var_db. }
-    { apply Expr.weakening. solve_wt. solve_wt; eauto with var_db.
+    { apply Expr.Weakening.weakening. solve_wt. solve_wt; eauto with var_db.
       Var.simplify. repeat solve_wt; auto with var_db. lia. lia.
     } 
-    { apply Expr.weakening. solve_wt.
+    { apply Expr.Weakening.weakening. solve_wt.
       Var.simplify. repeat solve_wt; auto with var_db. lia. lia.
     }
     { auto with var_db. }
@@ -137,10 +139,10 @@ Proof.
     ChorEnv.simplify.
     solve_wt.
     { apply Expr.WTCVar; Var.simplify; eauto with var_db. }
-    { apply Expr.weakening. solve_wt. simpl. solve_wt; eauto with var_db.
+    { apply Expr.Weakening.weakening. solve_wt. simpl. solve_wt; eauto with var_db.
       Var.simplify. repeat solve_wt; auto with var_db. lia.
     } 
-    { apply Expr.weakening. solve_wt.
+    { apply Expr.Weakening.weakening. solve_wt.
       Var.simplify. repeat solve_wt; auto with var_db. lia.
     }
     { auto with var_db. }
@@ -155,7 +157,7 @@ Proof.
 
   unfold ChorEnv.remove. ChorEnv.simplify.
 
-  eapply Choreography.weakening_gen with (G := Actor.Map.empty (Var.Map.t typ)) (G0 := ChorEnv.add Bob 8 BIT (ChorEnv.add Bob 7 BIT (Actor.Map.empty _))).
+  eapply Choreography.Weakening.weakening_gen with (G := Actor.Map.empty (Var.Map.t typ)) (G0 := ChorEnv.add Bob 8 BIT (ChorEnv.add Bob 7 BIT (Actor.Map.empty _))).
   2:{
     intros B. split. ChorEnv.simplify; auto with var_db.
     ChorEnv.simplify. repeat solve_wt; auto with var_db; lia.
@@ -170,15 +172,17 @@ Proof.
   auto.
 Qed.
 
-Definition choreo : Choreography.t :=
-  mk (
+Import List.ListNotations.
+
+Definition choreo : Qoreo (list Var.t) :=
     do q ← "alice" [- Unitary H (New (Bit false))-] ;;
-    teleport "alice" "bob" q
-  ).
+    do q ← teleport "alice" "bob" q ;;
+    ret [q].
 
-Eval compute in choreo.
 
-Eval compute in (Network.epp "alice" choreo).
+Eval compute in (mk choreo).
+
+Eval compute in (Network.epp "alice" (mk choreo)).
 (*
   do q ← Unitary H (New (Bit false)) ;;
   do a ← establish_entanglement Bob ;;
@@ -191,7 +195,7 @@ Eval compute in (Network.epp "alice" choreo).
 *)
 
 
-Eval compute in (Network.epp "bob" choreo).
+Eval compute in (Network.epp "bob" (mk choreo)).
 (*
   do b ← establish_entanglement Alice ;;
   do x ← Receive Alice ;;
@@ -201,19 +205,18 @@ Eval compute in (Network.epp "bob" choreo).
 *)
 
 
-Eval compute in (Network.epp "bob" choreo).
+Eval compute in (Network.epp "bob" (mk choreo)).
 
-
+Import List.ListNotations.
 Definition parties : list Actor.t :=
   ["alice"; "bob"].
 
 
-Import ExampleExtraction.
 From Stdlib Require Import extraction.ExtrOcamlNativeString.
 From Qoreo Require Import NetQasm.
 
 Definition apps : option (list AppFile.t) :=
-    ExampleExtraction.render_parties choreo parties.
+    Notation.render_Qoreo NetQASM parties choreo.
 
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".

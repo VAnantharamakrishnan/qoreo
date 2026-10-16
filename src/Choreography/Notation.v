@@ -1,12 +1,14 @@
 From Stdlib Require Import String.
 From Stdlib Require Lists.List.
 From Stdlib Require Import extraction.ExtrOcamlNativeString.
-Import List.ListNotations.
+Export List.ListNotations.
 From Stdlib Require Import Setoid.
 
 
-From Qoreo Require Import Base Expr Choreography.
-From Qoreo Require Import Network NetQasm.
+From Qoreo.Base Require Config.
+Export Config.Unitary.
+From Qoreo Require Import Expr.Expr Choreography.Choreography.
+From Qoreo Require Import Network.Network NetQasm.
 Require Extraction.
 
 (** 
@@ -47,13 +49,13 @@ Declare Scope example_scope.
   Definition empty_state : state :=
   {|
     vars := Var.Map.empty _;
-    chor := []
+    chor := Choreography.Empty
   |}.
 
   (** Extract the underlying choreography from a monadic computation. *)
   Definition mk {T} (m : Qoreo T) : Choreography.t :=
-    let (s,_) := m empty_state in
-    chor s.
+    let (st, _) := m empty_state in 
+    chor st.
 
   (** Allocate a fresh variable and map it to the actor [A] in the underlying state. *)
   Definition fresh A : Qoreo Var.t :=
@@ -65,12 +67,16 @@ Declare Scope example_scope.
       |} in
       (s', x).
 
+  (* TODO: move to Choreography module *)
+  Definition snoc C I :=
+    Choreography.seq C (Choreography.Do I Choreography.Empty).
+
   (** Append instruction [I] to the choreography in the current state *)
   Definition add_insn (I : Choreography.Insn.t) : Qoreo unit :=
     fun s =>
       let s' := {|
         vars := vars s;
-        chor := (chor s ++ [I])%list
+        chor := snoc (chor s) I
       |} in
       (s', tt).
 
@@ -127,10 +133,10 @@ Declare Scope example_scope.
 
   (** Conditionally apply X gate based on classical bit [e]. *)
   Definition if_X A (e : Expr.t) (q : Var.t) : Qoreo unit :=
-    add_insn (Choreography.Insn.Let A q (If e (Unitary X q) q)).
+    add_insn (Choreography.Insn.Let A q (Expr.If e (Unitary X q) q)).
   (** Conditionally apply Z gate based on classical bit [e]. *)
   Definition if_Z A (e : Expr.t) (q : Var.t) : Qoreo unit :=
-    add_insn (Choreography.Insn.Let A q (If e (Unitary Z q) q)).
+    add_insn (Choreography.Insn.Let A q (Expr.If e (Unitary Z q) q)).
 
   (** Convenient notations for local quantum operations. *)
   Notation "A '[-' e '-]'" :=
@@ -208,28 +214,21 @@ Ltac right_associate A :=
     do x      ← Alice [- Meas a -] ;;
     do z      ← send Alice z Bob ;;
     do x      ← send Alice x Bob ;;
-    do b      ← Bob [- If z (Unitary Z b) b -] ;;
-    do b      ← Bob [- If x (Unitary X b) b -] ;;
+    do b      ← Bob [- Expr.If z (Unitary Z b) b -] ;;
+    do b      ← Bob [- Expr.If x (Unitary X b) b -] ;;
     ret b.
 
 
-Module ExampleExtraction.
-  Definition render_party (choreo : Choreography.t) (p : Actor.t)
-    : option AppFile.t :=
-    match Network.epp p choreo with
-    | Some proc =>
-        Some {| AppFile.party := p; AppFile.source := render_app p proc |}
-    | None => None
-    end.
-
-  Fixpoint render_parties (choreo : Choreography.t) (ps : list Actor.t)
-    : option (list AppFile.t) :=
-    match ps with
-    | [] => Some []
-    | p :: ps' =>
-        match render_party choreo p, render_parties choreo ps' with
-        | Some app, Some apps => Some (app :: apps)
-        | _, _ => None
-        end
-    end.
-End ExampleExtraction.
+Definition render_Qoreo (b : Backend) (ps : list Actor.t)
+                        (M : Qoreo (list Var.t)) 
+  : option (list AppFile.t) :=
+  let (st, xs) := M empty_state in
+  let f := fun (env : Actor.Map.t (list Var.t)) (p : Actor.t) =>
+    Actor.Map.add p (epp_vars p (vars st) xs) env
+  in
+  let env_map : Actor.Map.t (list Var.t) :=
+      List.fold_left f ps (Actor.Map.empty _)
+  in
+  NetQasm.render_parties b (chor st)
+          ps
+          env_map.

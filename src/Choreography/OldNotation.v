@@ -2,7 +2,8 @@ From Stdlib Require Import String.
 From Stdlib Require Lists.List.
 Import List.ListNotations.
 
-From Qoreo Require Import Base Expr Choreography Network NetQasm.
+From Qoreo Require Import Base.Config Expr.Expr Choreography.Choreography Network.Network NetQasm.
+Import Config.Unitary.
 
 Open Scope string_scope.
 
@@ -57,24 +58,3 @@ Module ExampleNotation.
   Notation "'New[' b ']'" := (new b)
     (at level 0, b at next level).
 End ExampleNotation.
-
-Module ExampleExtraction.
-  Definition render_party (choreo : Choreography.t) (p : Actor.t)
-    : option AppFile.t :=
-    match Network.epp p choreo with
-    | Some proc =>
-        Some {| AppFile.party := p; AppFile.source := render_app p proc |}
-    | None => None
-    end.
-
-  Fixpoint render_parties (choreo : Choreography.t) (ps : list Actor.t)
-    : option (list AppFile.t) :=
-    match ps with
-    | [] => Some []
-    | p :: ps' =>
-        match render_party choreo p, render_parties choreo ps' with
-        | Some app, Some apps => Some (app :: apps)
-        | _, _ => None
-        end
-    end.
-End ExampleExtraction.
