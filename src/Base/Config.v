@@ -1,20 +1,49 @@
 From QuantumLib Require Import Matrix Pad Quantum.
-From Stdlib Require Import String Morphisms (* for Proper *).
-Require Import Setoid. (* for setoid_replace with *)
+From Stdlib Require Import String Morphisms.
+From Stdlib Require QArith.
+Require Import Setoid.
 From Qoreo.Base Require Var.
 
+
+
+Definition pi : QArith_base.Q :=
+  QArith_base.Qmake 22%Z 7%positive.
+
+Definition inv_sqrt2 : QArith_base.Q :=
+  QArith_base.Qmake 707107%Z 1000000%positive.
+
 Module Unitary.
-Inductive unitary :=
-| H | X | Y | Z | CNOT | SGATE | Sdag
-| CS | TGATE | Tdag | CT | CTdag | CSdag.
+  Inductive unitary :=
+  | H | X | Y | Z | CNOT | SGATE | Sdag
+  | CS | TGATE | Tdag | CT | CTdag | CSdag
+  | RZ  : QArith_base.Q -> unitary
+  | CRZ : QArith_base.Q -> unitary.
 End Unitary.
+
 Import Unitary.
-  
-  Record t := {
-    dim : nat;
-    (*qrefs : Var.Map.t nat;*)
-    qstate : Matrix (Nat.pow 2 dim) (Nat.pow 2 dim)
-  }.
+
+(* Z-rotation by a rational multiple of pi *)
+Definition rz (a : QArith_base.Q) : Matrix 2 2 :=
+  let θ := (Q2R a * PI)%R in
+  fun x y =>
+    match x, y with
+    | 0, 0 => Cexp (- θ / 2)
+    | 1, 1 => Cexp (θ / 2)
+    | _, _ => C0
+    end.
+
+Lemma WF_rz : forall a, WF_Matrix (rz a).
+Proof.
+  intros.
+  show_wf.
+Qed.
+
+#[export] Hint Resolve WF_rz : wf_db.
+
+Record t := {
+  dim : nat;
+  qstate : Matrix (Nat.pow 2 dim) (Nat.pow 2 dim)
+}.
 
 
   Record WellScoped (refs : Var.Map.t nat) (cfg : t) := {
@@ -114,6 +143,8 @@ Import Unitary.
   | Sdag, [q]  => @pad 1 q n Quantum.Sgate†
   | TGATE, [q] => @pad 1 q n Quantum.Tgate
   | Tdag, [q]  => @pad 1 q n Quantum.Tgate†
+  | RZ a, [q] => @pad 1 q n (rz a)
+  | CRZ a, [q1; q2] => pad_ctrl n q1 q2 (rz a)
   | _, _ => Zero
   end.
 

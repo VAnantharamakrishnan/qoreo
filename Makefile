@@ -70,3 +70,13 @@ generate-conditional-test-py: examples/conditional_test.vo ocaml/write_apps.ml o
 	ocamlc -I extracted -I ocaml -c ocaml/generate_conditional_test.ml
 	ocamlc -I extracted -I ocaml -o extracted/generate_conditional_test unix.cma extracted/conditional_test_netqasm.cmo ocaml/write_apps.cmo ocaml/generate_conditional_test.cmo
 	./extracted/generate_conditional_test generated/conditional_test
+
+generate-grover-py: examples/distributed_grover.vo ocaml/write_apps.ml ocaml/generated_dgro.ml python/qoreo_netsquid_runtime.py
+	mkdir -p extracted generated
+	ocamlc -I extracted -c extracted/distributed_grover_netqasm.mli
+	ocamlc -I extracted -c extracted/distributed_grover_netqasm.ml
+	ocamlc -I extracted -I ocaml -c ocaml/write_apps.ml
+	ocamlc -I extracted -I ocaml -c ocaml/generated_dgro.ml
+	ocamlc -I extracted -I ocaml -o extracted/generate_dgro unix.cma extracted/distributed_grover_netqasm.cmo ocaml/write_apps.cmo ocaml/generated_dgro.cmo
+	./extracted/generate_dgro generated/grover
+

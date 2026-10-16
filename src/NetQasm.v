@@ -1,5 +1,5 @@
 From Stdlib Require Import Ascii String.
-From Stdlib Require Import Numbers.DecimalString.
+From Stdlib Require Import Numbers.DecimalString QArith.
 From Stdlib Require Lists.List.
 Import List.ListNotations.
 Open Scope list_scope.
@@ -67,6 +67,19 @@ Definition render_unitary (u : unitary) : string :=
   | Sdag => "Sdag"
   | TGATE => "TGATE"
   | Tdag => "Tdag"
+  | RZ _ => "RZ"
+  | CRZ _ => "CRZ"
+  end.
+
+(* Argument to qr.Unitary: the quoted gate name, or for rotations by a·π,
+   the name with a's numerator and denominator, e.g. ("RZ", 1, 4). *)
+Definition render_gate (u : unitary) : string :=
+  let name := dq +:+ render_unitary u +:+ dq in
+  match u with
+  | RZ a | CRZ a =>
+      "(" +:+ name +:+ ", " +:+ NilZero.string_of_int (Z.to_int (Qnum a))
+          +:+ ", " +:+ NilZero.string_of_uint (Pos.to_uint (Qden a)) +:+ ")"
+  | _ => name
   end.
 
 Fixpoint render_expr (e : Expr.t) : string :=
@@ -88,7 +101,7 @@ Fixpoint render_expr (e : Expr.t) : string :=
   | Expr.Meas e1 => emit_call "rt.Meas" [render_expr e1]
   | Expr.New (Expr.Bit b) => emit_call "rt.new" [bool_literal b]
   | Expr.Unitary u e1 =>
-      emit_call "qr.Unitary" [dq +:+ render_unitary u +:+ dq; render_expr e1]
+      emit_call "qr.Unitary" [render_gate u; render_expr e1]
   | _ => unsupported
   end.
 

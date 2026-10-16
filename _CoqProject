@@ -38,3 +38,4 @@ examples/Protocols.v
 examples/dis_qft.v
 examples/unitary_test.v
 examples/conditional_test.v
+examples/distributed_grover.v

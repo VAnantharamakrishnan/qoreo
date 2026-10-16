@@ -347,6 +347,8 @@ match U with
 | CT => Tensor QUBIT QUBIT
 | CSdag => Tensor QUBIT QUBIT
 | CTdag => Tensor QUBIT QUBIT
+| RZ _ => QUBIT
+| CRZ _ => Tensor QUBIT QUBIT
 | _ => QUBIT
 end.
 
