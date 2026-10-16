@@ -6,7 +6,7 @@ Open Scope list_scope.
 Open Scope string_scope.
 
 From Qoreo Require Base.Var Base.Config Expr.Expr Choreography.Choreography Network.Network.
-Import Config.Unitary.
+Import Config.
 Import Choreography.
 
 
@@ -53,7 +53,8 @@ Definition bool_literal (b : bool) : string :=
 Definition emit_call (fn : string) (args : list string) : string :=
   fn +:+ "(" +:+ join ", " args +:+ ")".
 
-Definition render_unitary (u : unitary) : string :=
+Import Unitary.
+Definition render_unitary (u : Unitary.t) : string :=
   match u with
   | H => "H"
   | X => "X"
@@ -74,7 +75,7 @@ Definition render_unitary (u : unitary) : string :=
 
 (* Argument to qr.Unitary: the quoted gate name, or for rotations by a·π,
    the name with a's numerator and denominator, e.g. ("RZ", 1, 4). *)
-Definition render_gate (u : unitary) : string :=
+Definition render_gate (u : Unitary.t) : string :=
   let name := dq +:+ render_unitary u +:+ dq in
   match u with
   | RZ a | CRZ a =>
@@ -155,30 +156,64 @@ Fixpoint epr_peers (P : Network.Process.t) : Actor.FSet.t :=
 Definition render_peer_list (xs : Actor.FSet.t) : string :=
   "[" +:+ join ", " (List.map actor_literal (Actor.FSet.elements xs)) +:+ "]".
 
-Definition render_insn (insn : Network.Insn.t) : string :=
+Definition render_insn (indent : nat) (insn : Network.Insn.t) : string :=
   match insn with
   | Network.Insn.Let x e =>
-      line 2 (var_name x +:+ " = " +:+ render_expr e)
+      line indent (var_name x +:+ " = " +:+ render_expr e)
   | Network.Insn.LetBang x e =>
-      line 2 (var_name x +:+ " = " +:+ render_expr e)
+      line indent (var_name x +:+ " = " +:+ render_expr e)
   | Network.Insn.LetPair x y e =>
-      line 2 (var_name x +:+ ", " +:+ var_name y +:+ " = " +:+ render_expr e)
+      line indent (var_name x +:+ ", " +:+ var_name y +:+ " = " +:+ render_expr e)
   | Network.Insn.Send e peer =>
-      line 2 (emit_call "rt.send" [actor_literal peer; render_expr e])
+      line indent (emit_call "rt.send" [actor_literal peer; render_expr e])
   | Network.Insn.Receive x peer =>
-      line 2 (var_name x +:+ " = " +:+ emit_call "rt.recv" [actor_literal peer])
+      line indent (var_name x +:+ " = " +:+ emit_call "rt.recv" [actor_literal peer])
   | Network.Insn.EPR x peer =>
-      line 2 (var_name x +:+ " = " +:+ emit_call "rt.epr" [actor_literal peer])
+      line indent (var_name x +:+ " = " +:+ emit_call "rt.epr" [actor_literal peer])
   end.
-
-Fixpoint render_process_body (P : Network.Process.t) : string :=
+(*To check empty branches*)  
+Definition render_branch (depth : nat) (body : string) : string :=
+  match body with
+  | EmptyString => line depth "pass"
+  | _ => body
+  end.
+Fixpoint render_process_body
+  (depth : nat)
+  (P : Network.Process.t) : string :=
   match P with
-  | Process.Empty => EmptyString
-  | Process.Do insn P' => render_insn insn +:+ render_process_body P'
-  | Process.MulticastIf e targets P1 P2 P' => "TODO: MulticastIf not yet implemented"
-  | Process.ReceiveIf source P1 P2 P' => "TODO: ReceiveIf not yet implemented"
-  end.
 
+  | Process.Empty =>
+      EmptyString
+
+  | Process.Do insn P' =>
+      render_insn depth insn
+      +:+ render_process_body depth P'
+
+  | Process.MulticastIf e targets P1 P2 P' =>
+    let condition := render_expr e in
+    let broadcasts :=
+    String.concat ""
+    (List.map
+      (fun peer =>
+        line depth
+          (emit_call "rt.send" [actor_literal peer; condition]))
+      (Actor.FSet.elements targets))
+    in
+    broadcasts
+    +:+ line depth ("if " +:+ condition +:+ ":")
+    +:+ render_branch (S depth) (render_process_body (S depth) P1)
+    +:+ line depth "else:"
+    +:+ render_branch (S depth) (render_process_body (S depth) P2)
+    +:+ render_process_body depth P'
+
+| Process.ReceiveIf source P1 P2 P' =>
+    line depth ("if " +:+ emit_call "rt.recv" [actor_literal source] +:+ ":")
+    +:+ render_branch (S depth) (render_process_body (S depth) P1)
+    +:+ line depth "else:"
+    +:+ render_branch (S depth) (render_process_body (S depth) P2)
+    +:+ render_process_body depth P'
+
+  end.
 Fixpoint last_bound_var (P : Network.Process.t) : option Var.t :=
   match P with
   | Process.Empty => None
@@ -214,11 +249,7 @@ Definition render_app (b : Backend) (self : Actor.t) (P : Network.Process.t) (xs
             render_peer_list classicals +:+ ", " +:+
             render_peer_list eprs +:+ ")") +:+
   line 1 "with rt.connection():" +:+
-  render_process_body P +:+
-  (*match last_bound_var P with
-  | Some x => line 2 ("return " +:+ var_name x)
-  | None => EmptyString
-  end.*)
+  render_process_body 1 P +:+
   line 2 ("return (" +:+ join ", " (List.map var_name xs) +:+ ")").
   
   Definition epp_vars (p : Actor.t) (env : Var.Map.t Actor.t) (xs : list Var.t) 

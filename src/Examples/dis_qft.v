@@ -8,6 +8,9 @@ Import List.ListNotations.
 
 Open Scope string_scope.
 Open Scope example_scope.
+Import Unitary.
+From Stdlib Require Import List.
+Import ListNotations.
 
 Module DQFT.
   (* Distributed QFT example taken from: https://arxiv.org/pdf/2606.18494 *)

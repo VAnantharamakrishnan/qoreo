@@ -21,10 +21,10 @@ Module ExampleNotation.
   Definition new (b : bool) : Expr.t :=
     Expr.New (Expr.Bit b).
 
-  Definition apply1 (u : unitary) (x : Var.t) : Expr.t :=
+  Definition apply1 (u : Config.Unitary.t) (x : Var.t) : Expr.t :=
     Expr.Unitary u (ref x).
 
-  Definition apply2 (u : unitary) (x y : Var.t) : Expr.t :=
+  Definition apply2 (u : Config.Unitary.t) (x y : Var.t) : Expr.t :=
     Expr.Unitary u (Expr.Pair (ref x) (ref y)).
 
   Definition if_ (cond_ then_ else_ : Expr.t) : Expr.t :=
