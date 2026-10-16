@@ -5,8 +5,9 @@ Import List.ListNotations.
 Open Scope list_scope.
 Open Scope string_scope.
 
-From Qoreo Require Base.Var Base.Config Expr.Expr Network.Network.
+From Qoreo Require Base.Var Base.Config Expr.Expr Choreography.Choreography Network.Network.
 Import Config.Unitary.
+Import Choreography.
 
 
 Module AppFile.
@@ -111,7 +112,7 @@ Fixpoint classical_peers (P : Network.Process.t) : Actor.FSet.t :=
     Actor.FSet.add peer (classical_peers P')
   | Process.Do _ P' => classical_peers P'
 
-  | Process.BroadcastIf _ peers P1 P2 P' =>
+  | Process.MulticastIf _ peers P1 P2 P' =>
     (Actor.FSet.union peers
       (Actor.FSet.union (classical_peers P1)
       (Actor.FSet.union (classical_peers P2) 
@@ -131,7 +132,7 @@ Fixpoint epr_peers (P : Network.Process.t) : Actor.FSet.t :=
     Actor.FSet.add peer (epr_peers P')
   | Process.Do _ P' => epr_peers P'
 
-  | Process.BroadcastIf _ _ P1 P2 P'
+  | Process.MulticastIf _ _ P1 P2 P'
   | Process.ReceiveIf _ P1 P2 P' =>
     (Actor.FSet.union (epr_peers P1)
     (Actor.FSet.union (epr_peers P2) 
@@ -161,7 +162,7 @@ Fixpoint render_process_body (P : Network.Process.t) : string :=
   match P with
   | Process.Empty => EmptyString
   | Process.Do insn P' => render_insn insn +:+ render_process_body P'
-  | Process.BroadcastIf e targets P1 P2 P' => "TODO: BroadcastIf not yet implemented"
+  | Process.MulticastIf e targets P1 P2 P' => "TODO: MulticastIf not yet implemented"
   | Process.ReceiveIf source P1 P2 P' => "TODO: ReceiveIf not yet implemented"
   end.
 
@@ -178,7 +179,7 @@ Fixpoint last_bound_var (P : Network.Process.t) : option Var.t :=
       | Network.Insn.Send _ _ => None
       end
   | Process.Do _ P'
-  | Process.BroadcastIf _ _ _ _ P'
+  | Process.MulticastIf _ _ _ _ P'
   | Process.ReceiveIf _ _ _ P' => last_bound_var P'
   end.
 
@@ -190,7 +191,7 @@ Definition render_import (b : Backend) :=
   | NetQASM  => "import qoreo_netqasm_runtime as qr"
   end.
 
-Definition render_app (b : Backend) (self : Actor.t) (P : Network.Process.t) : string :=
+Definition render_app (b : Backend) (self : Actor.t) (P : Network.Process.t) (xs : list Var.t) : string :=
   let classicals := classical_peers P in
   let eprs := epr_peers P in
   render_import b +:+ nl +:+ nl +:+
@@ -201,7 +202,45 @@ Definition render_app (b : Backend) (self : Actor.t) (P : Network.Process.t) : s
             render_peer_list eprs +:+ ")") +:+
   line 1 "with rt.connection():" +:+
   render_process_body P +:+
-  match last_bound_var P with
+  (*match last_bound_var P with
   | Some x => line 2 ("return " +:+ var_name x)
   | None => EmptyString
-  end.
+  end.*)
+  line 2 ("return (" +:+ join ", " (List.map var_name xs) +:+ ")").
+  
+  Definition epp_vars (p : Actor.t) (env : Var.Map.t Actor.t) (xs : list Var.t) 
+              : list Var.t :=
+    let f := fun x =>
+      match Var.Map.find x env with
+      | Some A => if Actor.eq_dec p A then true else false
+      | _ => false
+      end
+    in
+    List.filter f xs.
+
+  Definition render_party (b : Backend) (choreo : Choreography.t)
+                          (p : Actor.t)
+                          (xs : list Var.t)
+    : option AppFile.t :=
+    match Network.epp p choreo with
+    | Some proc =>
+        Some {| AppFile.party := p;
+                AppFile.source := render_app b p proc xs
+             |}
+    | None => None
+    end.
+
+  Fixpoint render_parties b (choreo : Choreography.t)
+                            (ps : list Actor.t)
+                            (return_values : Actor.Map.t (list Var.t))
+                            : option (list AppFile.t) :=
+    match ps with
+    | [] => Some []
+    | p :: ps' =>
+      let p_xs := Prelim.maybe (Actor.Map.find p return_values) [] in
+        match render_party b choreo p p_xs,
+              render_parties b choreo ps' return_values with
+        | Some app, Some apps => Some (app :: apps)
+        | _, _ => None
+        end
+    end.

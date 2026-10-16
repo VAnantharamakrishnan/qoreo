@@ -48,7 +48,7 @@ def run_once():
 
 
 def main():
-    expected = (((0, 0), (1, 0)), (0, 0))
+    expected = (0, 0, 1, 0, 0, 0)
 
     for run_index in range(NUM_RUNS):
         results = run_once()

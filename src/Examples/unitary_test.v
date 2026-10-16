@@ -1,7 +1,7 @@
 From Stdlib Require Import String.
+From Qoreo.Base Require Import Config. Import Unitary.
 From Qoreo Require Import Expr.Expr Choreography.Choreography.
 From Qoreo.Choreography Require Import Notation.
-Import ExampleExtraction.
 From Stdlib Require Import extraction.ExtrOcamlNativeString.
 From Qoreo Require Import NetQasm.
 
@@ -95,9 +95,9 @@ Module UnitaryTest.
     do r      ← Alice [- Meas target -] ;;
 
     ret r.
+  Import List.ListNotations.
 
-   Definition choreo : Choreography.t :=
-    mk (
+   Definition choreo : Qoreo (list Var.t) :=
       do t_result     ← tdag_test "alice" ;;
       do s_result     ← sdag_test "alice" ;;
       do cs_result    ← cs_test "alice" ;;
@@ -105,20 +105,20 @@ Module UnitaryTest.
       do csdag_result ← csdag_test "alice" ;;
       do ctdag_result ← ctdag_test "alice" ;;
 
-      "alice" [- Pair
+      ret [t_result; s_result; cs_result; ct_result; csdag_result; ctdag_result].
+      (*"alice" [- Pair
                     (Pair
                       (Pair (Var t_result) (Var s_result))
                       (Pair (Var cs_result) (Var ct_result)))
                     (Pair (Var csdag_result) (Var ctdag_result))
-              -]
-    ).
+              -]*)
 
   Definition parties : list Actor.t :=
     ["alice"].
 
 
   Definition apps : option (list AppFile.t) :=
-    ExampleExtraction.render_parties NetSquid choreo parties.
+    Notation.render_Qoreo NetSquid parties choreo.
 
 End UnitaryTest.
 

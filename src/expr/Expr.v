@@ -37,6 +37,7 @@ Inductive t :=
 | App : t -> t -> t
 .
 
+
 Inductive Val : t -> Prop :=
 | QRefVal : forall q,
   Val (QRef q)
