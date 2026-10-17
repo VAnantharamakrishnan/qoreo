@@ -1,11 +1,13 @@
 PYTHON_GENERATION_EXAMPLES := \
-	measure_send \
-	b92 \
-	dqft \
-	unitary_test \
-	teleportation \
-	conditional_test \
-	distributed_grover
+	MeasureSend \
+	B92 \
+	DQFT \
+	UnitaryTest \
+	Teleportation \
+	ConditionalTest \
+	DistributedGrover
+
+ocaml_module = $(shell printf '%s' '$1' | awk '{ if ($$0 ~ /^[A-Z]+$$/) print substr($$0, 1, 1) tolower(substr($$0, 2)); else print }')
 
 .PHONY: all clean clean-generated $(PYTHON_GENERATION_EXAMPLES) examples
 
@@ -40,9 +42,9 @@ $(PYTHON_GENERATION_EXAMPLES): %: \
 	python/qoreo_netqasm_runtime.py \
 	python/qoreo_netsquid_runtime.py
 	mkdir -p extracted generated
-	ocamlc -I extracted -c extracted/$*.mli
-	ocamlc -I extracted -c extracted/$*.ml
+	ocamlc -I extracted -c -o extracted/$(call ocaml_module,$*).cmi extracted/$*.mli
+	ocamlc -I extracted -c -o extracted/$(call ocaml_module,$*).cmo extracted/$*.ml
 	cp ocaml/generate_apps.ml extracted/generate_$*.ml
-	ocamlc -I extracted -I ocaml -open $(shell printf '%s' '$*' | awk '{print toupper(substr($$0,1,1)) substr($$0,2)}') -c extracted/generate_$*.ml
-	ocamlc -I extracted -I ocaml -o extracted/generate_$* unix.cma extracted/$*.cmo ocaml/write_apps.cmo extracted/generate_$*.cmo
+	ocamlc -I extracted -I ocaml -open $(call ocaml_module,$*) -c extracted/generate_$*.ml
+	ocamlc -I extracted -I ocaml -o extracted/generate_$* unix.cma extracted/$(call ocaml_module,$*).cmo ocaml/write_apps.cmo extracted/generate_$*.cmo
 	./extracted/generate_$* generated/$*

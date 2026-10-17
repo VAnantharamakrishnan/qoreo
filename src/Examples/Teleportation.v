@@ -221,4 +221,4 @@ Definition apps : option (list AppFile.t) :=
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
 Definition example_apps := apps.
-Extraction "teleportation.ml" example_apps.
+Extraction "Teleportation.ml" example_apps.

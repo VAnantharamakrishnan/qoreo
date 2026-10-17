@@ -32,11 +32,11 @@ src/Network/Proofs.v
 
 src/NetQasm.v
 
-src/Examples/teleportation.v
-src/Examples/measure_send.v
-src/Examples/b92.v
+src/Examples/Teleportation.v
+src/Examples/MeasureSend.v
+src/Examples/B92.v
 src/Examples/Protocols.v
-src/Examples/dqft.v
-src/Examples/unitary_test.v
-src/Examples/conditional_test.v
-src/Examples/distributed_grover.v
+src/Examples/DQFT.v
+src/Examples/UnitaryTest.v
+src/Examples/ConditionalTest.v
+src/Examples/DistributedGrover.v

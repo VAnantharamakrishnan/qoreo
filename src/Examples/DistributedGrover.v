@@ -140,4 +140,4 @@ Definition example_apps := DistributedGrover.apps.
 
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
-Extraction "distributed_grover.ml" example_apps.
+Extraction "DistributedGrover.ml" example_apps.

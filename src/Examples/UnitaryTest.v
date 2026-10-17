@@ -150,4 +150,4 @@ End UnitaryTest.
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
 Definition example_apps := UnitaryTest.apps.
-Extraction "unitary_test.ml" example_apps.
+Extraction "UnitaryTest.ml" example_apps.

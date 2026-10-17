@@ -34,4 +34,4 @@ End MeasureSend.
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
 Definition example_apps := MeasureSend.apps.
-Extraction "measure_send.ml" example_apps.
+Extraction "MeasureSend.ml" example_apps.
