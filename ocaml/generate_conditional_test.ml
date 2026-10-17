@@ -1,4 +1,4 @@
-module T = Conditional_test_netqasm
+module T = Conditional_test
 module W = Write_apps.Make (T)
 
 let () =

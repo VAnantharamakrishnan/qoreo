@@ -80,7 +80,7 @@ End ConditionalTest.
 
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
-Extraction "conditional_test_netqasm.ml" ConditionalTest.apps.
+Extraction "conditional_test.ml" ConditionalTest.apps.
 
 
 (*The error version
@@ -145,6 +145,6 @@ End ConditionalTest.
 
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
-Extraction "conditional_test_netqasm.ml" ConditionalTest.apps.
+Extraction "conditional_test.ml" ConditionalTest.apps.
 
 *)

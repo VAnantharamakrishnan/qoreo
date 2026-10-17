@@ -33,4 +33,4 @@ End MeasureSend.
 
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
-Extraction "measure_send_netqasm.ml" MeasureSend.apps.
+Extraction "measure_send.ml" MeasureSend.apps.

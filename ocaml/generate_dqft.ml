@@ -1,4 +1,4 @@
-module T = Dqft_netqasm
+module T = Dqft
 module W = Write_apps.Make (T)
 
 let () =

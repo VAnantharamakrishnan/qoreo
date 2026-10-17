@@ -138,5 +138,5 @@ End DistributedGrover.
 
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
-Extraction "distributed_grover_netqasm.ml"
+Extraction "distributed_grover.ml"
   DistributedGrover.apps.

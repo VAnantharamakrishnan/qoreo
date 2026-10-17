@@ -78,4 +78,4 @@ End DQFT.
 
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
-Extraction "dqft_netqasm.ml" DQFT.apps.
+Extraction "dqft.ml" DQFT.apps.

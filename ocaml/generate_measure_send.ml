@@ -1,4 +1,4 @@
-module T = Measure_send_netqasm
+module T = Measure_send
 module W = Write_apps.Make (T)
 
 let () =

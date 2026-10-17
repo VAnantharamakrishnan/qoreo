@@ -1,4 +1,4 @@
-module T = Teleportation_netqasm
+module T = Teleportation
 module W = Write_apps.Make (T)
 
 let () =

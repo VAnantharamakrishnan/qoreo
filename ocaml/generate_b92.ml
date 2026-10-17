@@ -1,4 +1,4 @@
-module T = B92_netqasm
+module T = B92
 module W = Write_apps.Make (T)
 
 let () =

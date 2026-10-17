@@ -88,4 +88,4 @@ End B92.
 
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
-Extraction "b92_netqasm.ml" B92.apps.
+Extraction "b92.ml" B92.apps.

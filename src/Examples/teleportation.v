@@ -220,4 +220,4 @@ Definition apps : option (list AppFile.t) :=
 
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
-Extraction "teleportation_netqasm.ml" apps.
+Extraction "teleportation.ml" apps.
