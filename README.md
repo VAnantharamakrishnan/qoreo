@@ -28,8 +28,6 @@ The repository contains the Rocq formalization, extraction/generation tools, Pyt
 │   ├── Network/          # Process/network semantics and endpoint projection
 │   ├── Examples/         # Example choreographies
 │   ├── NetQasm.v         # Rendering projected processes as Python applications
-│   ├── NewChoreography.v # Experimental choreography representation
-│   └── expr/             # Earlier expression-language sources
 ├── ocaml/                # Drivers that write generated party applications
 ├── python/               # NetQASM and NetSquid runtime implementations
 ├── test_examples/        # B92, DQFT, and unitary simulation tests
@@ -46,7 +44,7 @@ The main Rocq components are:
 * `src/Examples/` contains B92, measurement/send, teleportation, protocols, distributed QFT, and unitary-gate examples.
 * `src/NetQasm.v` renders projected processes as Python source.
 
-The code-generation pipeline is split between `ocaml/write_apps.ml`, the per-example drivers in `ocaml/`, and the runtime modules in `python/`.
+The code-generation pipeline uses the shared driver in `ocaml/generate_apps.ml`, the writer in `ocaml/write_apps.ml`, and the runtime modules in `python/`.
 
 
 # Contributing to the repository
@@ -58,18 +56,20 @@ To add a new Rocq `.v` file, place it in the appropriate `src/` subdirectory and
 For a new example named `my_example`:
 
 1. Add `src/Examples/my_example.v` and list it in `_CoqProject`. Use the existing files in `src/Examples/` as a guide for defining the choreography and its parties.
-2. If the example should generate Python applications, define an `apps` value using the appropriate renderer and add Rocq extraction at the end of the file:
+2. If the example should generate Python applications, define an `apps` value using the appropriate renderer. Export it at the top level of the Coq file, then add Rocq extraction at the end:
 
    ```rocq
+   End MyExample.
+   Definition example_apps := MyExample.apps.
+
    Extraction Language OCaml.
    Set Extraction Output Directory "extracted".
-   Extraction "my_example.ml" MyExample.apps.
+   Extraction "my_example.ml" example_apps.
    ```
 
-   The extraction name must match the file stem. The extracted module name will be `My_example`.
-3. Add `ocaml/generate_my_example.ml`. Follow a nearby driver such as `ocaml/generate_b92.ml`, updating the imported extracted module and the `apps` value to match the example. Set the default output directory to `generated/my_example`.
-4. Add `my_example` to `PYTHON_GENERATION_EXAMPLES` in the `Makefile`. The shared pattern rule then provides `make my_example` and includes it in `make examples`.
-5. Verify the example with `make my_example` (or build all generated examples with `make examples`). If it needs a simulation or behavior test, add one under `test_examples/`.
+   `MyExample.apps` above is the value defined inside the example module; the top-level `example_apps` alias is the common extraction interface. The extraction filename must match the example file stem.
+3. Add `my_example` to `PYTHON_GENERATION_EXAMPLES` in the `Makefile`. The shared pattern rule uses `ocaml/generate_apps.ml` and provides `make my_example`, writing output to `generated/my_example/`.
+4. Verify the example with `make my_example` (or build all generated examples with `make examples`). If it needs a simulation or behavior test, add one under `test_examples/`.
 
 # Extracting to NetQASM
 

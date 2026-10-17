@@ -7,7 +7,7 @@ PYTHON_GENERATION_EXAMPLES := \
 	conditional_test \
 	distributed_grover
 
-.PHONY: all clean $(PYTHON_GENERATION_EXAMPLES) examples
+.PHONY: all clean clean-generated $(PYTHON_GENERATION_EXAMPLES) examples
 
 all: CoqMakefile
 	$(MAKE) -f CoqMakefile
@@ -20,9 +20,14 @@ proofs: CoqMakefile
 CoqMakefile: _CoqProject
 	rocq makefile -f _CoqProject -o CoqMakefile
 
-clean: CoqMakefile
+ocaml/write_apps.cmo: ocaml/write_apps.ml
+	ocamlc -I extracted -I ocaml -c $<
+
+clean: CoqMakefile clean-generated
 	$(MAKE) -f CoqMakefile clean
 	rm -f CoqMakefile CoqMakefile.conf
+
+clean-generated: 
 	rm -rf extracted generated
 
 %: CoqMakefile
@@ -30,14 +35,14 @@ clean: CoqMakefile
 
 $(PYTHON_GENERATION_EXAMPLES): %: \
 	src/Examples/%.vo \
-	ocaml/write_apps.ml \
-	ocaml/generate_%.ml \
+	ocaml/write_apps.cmo \
+	ocaml/generate_apps.ml \
 	python/qoreo_netqasm_runtime.py \
 	python/qoreo_netsquid_runtime.py
 	mkdir -p extracted generated
 	ocamlc -I extracted -c extracted/$*.mli
 	ocamlc -I extracted -c extracted/$*.ml
-	ocamlc -I extracted -I ocaml -c ocaml/write_apps.ml
-	ocamlc -I extracted -I ocaml -c ocaml/generate_$*.ml
-	ocamlc -I extracted -I ocaml -o extracted/generate_$* unix.cma extracted/$*.cmo ocaml/write_apps.cmo ocaml/generate_$*.cmo
+	cp ocaml/generate_apps.ml extracted/generate_$*.ml
+	ocamlc -I extracted -I ocaml -open $(shell printf '%s' '$*' | awk '{print toupper(substr($$0,1,1)) substr($$0,2)}') -c extracted/generate_$*.ml
+	ocamlc -I extracted -I ocaml -o extracted/generate_$* unix.cma extracted/$*.cmo ocaml/write_apps.cmo extracted/generate_$*.cmo
 	./extracted/generate_$* generated/$*
