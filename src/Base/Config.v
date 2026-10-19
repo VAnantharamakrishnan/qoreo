@@ -13,11 +13,11 @@ Definition inv_sqrt2 : QArith_base.Q :=
   QArith_base.Qmake 707107%Z 1000000%positive.
 
 Module Unitary.
-  Inductive unitary :=
+  Inductive t :=
   | H | X | Y | Z | CNOT | SGATE | Sdag
   | CS | TGATE | Tdag | CT | CTdag | CSdag
-  | RZ  : QArith_base.Q -> unitary
-  | CRZ : QArith_base.Q -> unitary.
+  | RZ  : QArith_base.Q -> t
+  | CRZ : QArith_base.Q -> t.
 End Unitary.
 
 Import Unitary.
@@ -128,7 +128,7 @@ Record t := {
     end.
 
 
-  Definition gate_to_matrix (n : nat) (U : unitary) (qs : list nat) : Matrix (2^n) (2^n) :=
+  Definition gate_to_matrix (n : nat) (U : Unitary.t) (qs : list nat) : Matrix (2^n) (2^n) :=
   match U, qs with
   | H, [q] => @pad 1 q n Quantum.hadamard
   | X, [q] => @pad 1 q n Quantum.σx
@@ -148,7 +148,7 @@ Record t := {
   | _, _ => Zero
   end.
 
-  Definition apply_gate (U : unitary) (xs : list Var.t) refs (cfg : t) : t :=
+  Definition apply_gate (U : Unitary.t) (xs : list Var.t) refs (cfg : t) : t :=
     let qs := List.map (fun x => find x refs) xs in
     apply_matrix cfg (gate_to_matrix _ U qs).
 

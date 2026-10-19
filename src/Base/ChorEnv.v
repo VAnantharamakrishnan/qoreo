@@ -34,6 +34,21 @@ From Qoreo.Base Require Var Actor Config.
       Var.Map.MapsTo x tau (find A G).
 
 
+    Definition Partition {T} (M1 M2 M3 : ChorEnv.t T) :=
+      forall A, Var.Map.Partition (ChorEnv.find A M1) (ChorEnv.find A M2) (ChorEnv.find A M3).
+    Import List.ListNotations.
+    Inductive PartitionList {α} : ChorEnv.t α -> list (ChorEnv.t α) -> Prop :=
+    | PartitionEq : forall M, PartitionList M [M]
+    | PartitionCons : forall M M1 M2 ls,
+      Partition M M1 M2 ->
+      PartitionList M2 ls ->
+      PartitionList M (M1::ls).
+
+    Definition EmptyExcept {α} As (M : ChorEnv.t α) :=
+      forall A, ~ Actor.FSet.In A As ->
+      Var.Map.Empty (ChorEnv.find A M).
+
+
     Definition WellScoped (T : ChorEnv.t nat) (cfg : Config.t) : Prop :=
       forall A, Config.WellScoped (ChorEnv.find A T) cfg.
 
@@ -50,7 +65,11 @@ From Qoreo.Base Require Var Actor Config.
         (x1, x2, refs'', cfg')
       end.
 
-    Ltac simplify := repeat (Actor.simplify; Var.simplify).
+    Ltac simplify := 
+      repeat match goal with
+      | [ H : PartitionList _ _ |- _ ] => inversion H; subst; clear H
+      end;
+      repeat (Actor.simplify; Var.simplify).
 
 
     (** properties of find *)
@@ -150,6 +169,35 @@ From Qoreo.Base Require Var Actor Config.
   Qed.
   #[global] Hint Rewrite find_empty : var_db.
 
+
+
+  Lemma find_singleton : forall {T} (m : Var.Map.t T) A,
+    Var.Map.Equal
+      (ChorEnv.find A (Actor.Map.singleton A m))
+      m.
+  Proof.
+    intros. unfold Actor.Map.singleton.
+    Var.simplify. Actor.simplify.
+  Qed.
+  #[global] Hint Rewrite @find_singleton : var_db.
+
+
+  (* Empty_except *)
+
+  #[global] Instance EmptyExceptProper : forall A,
+    Proper (Actor.FSet.Equal ==> Equal ==> iff) (@EmptyExcept A).
+  Admitted.
+
+  (* Partition *)
+  
+
+  #[global] Instance PartitionProper : forall A,
+      Proper (Equal ==> Equal ==> Equal ==> iff) (@Partition A).
+  Admitted.
+
+  #[global] Instance PartitionListProper : forall A,
+      Proper (@Equal A ==> SetoidList.eqlistA Equal ==> iff) (@PartitionList A).
+  Admitted.
 
     (** Properties of ChorEnv.add *)
       
@@ -405,6 +453,20 @@ From Qoreo.Base Require Var Actor Config.
       intros A
     end.
   Ltac solve := reflect_find; simplify.
+
+  Ltac reflect_partition :=
+    repeat match goal with
+    | [ H : ChorEnv.PartitionList _ _ |- _ ] =>
+      inversion H; subst; clear H
+    end;
+    Var.Map.Tactics.reflect_partition'.
+  Ltac specialize_partition A :=
+    repeat match goal with
+    | [ H : ChorEnv.PartitionList _ _ |- _ ] =>
+      inversion H; subst; clear H
+    | [ H : ChorEnv.Partition _ _ _ |- _ ] =>
+      specialize (H A)
+    end.
 
   (** Properties of epr *)
 

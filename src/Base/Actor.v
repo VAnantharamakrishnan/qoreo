@@ -61,6 +61,7 @@ Create HintDb actor_db.
   #[global] Existing Instance Map.Proofs.concatProper.
   #[global] Existing Instance Map.Proofs.domainProper.
   #[global] Existing Instance Map.FSetProofs.setminusProper.
+  #[global] Existing Instance Map.Proofs.PartitionListProper.
 
   #[global] Hint Rewrite Map.Proofs.concat_find : actor_db.
   #[global] Hint Rewrite Map.Proofs.concat_in : actor_db.
