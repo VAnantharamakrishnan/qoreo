@@ -4,8 +4,9 @@ From Qoreo.Base Require Import Config Var Actor.
 From Qoreo.Expr Require Import Expr.
 From Qoreo.Choreography Require Import Choreography.
 From Qoreo.Network Require Import Network.
-From QoreoExamples Require Import Notation.
-Import ExampleExtraction.
+From Qoreo.Choreography Require Import Notation.
+(*From QoreoExamples Require Import Notation.*)
+(*Import ExampleExtraction.*)
 From Stdlib Require Import extraction.ExtrOcamlNativeString.
 From Qoreo Require Import NetQasm.
 
@@ -167,19 +168,35 @@ Module DistributedGrover.
   (* Generic distributed grover's. boolean inputs to the function mimic saying: 
   we have an f(x) that outputs 1 and 0s elsewhere
   *)
-  Definition choreo : Choreography.t :=
+ (* Definition choreo : Choreography.t :=
     mk (
       do result ←
         grover "alice" "bob" false false ;;
       ret result
     ).
 
-  Definition parties : list Actor.t :=
+   Definition parties : list Actor.t :=
     ["alice"; "bob"].
 
   Definition apps : option (list AppFile.t) :=
-    ExampleExtraction.render_parties choreo parties.
+    Notation.render_Qoreo NetSquid parties
+      (do (resultA, resultB) ←
+         grover "alice" "bob" false false ;;
+       ret [resultA; resultB]).
+*)
+Definition program : Qoreo (list Var.t) :=
+  do (resultA, resultB) ←
+    grover "alice" "bob" false false ;;
+  ret [resultA; resultB].
 
+Definition choreo : Choreography.t :=
+  mk program.
+
+Definition parties : list Actor.t :=
+  ["alice"; "bob"].
+
+Definition apps : option (list AppFile.t) :=
+  Notation.render_Qoreo NetSquid parties program.
 End DistributedGrover.
 
 Extraction Language OCaml.
