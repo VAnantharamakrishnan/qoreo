@@ -199,7 +199,8 @@ Definition apps : option (list AppFile.t) :=
   Notation.render_Qoreo NetSquid parties program.
 End DistributedGrover.
 
+Definition example_apps := DistributedGrover.apps.
+
 Extraction Language OCaml.
 Set Extraction Output Directory "extracted".
-Extraction "distributed_grover_netqasm.ml"
-  DistributedGrover.apps.
+Extraction "DistributedGrover.ml" example_apps.
