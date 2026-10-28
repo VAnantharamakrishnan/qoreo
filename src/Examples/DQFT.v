@@ -15,51 +15,48 @@ Module DQFT.
 
   (* General DQFT algorithm as seen in: https://arxiv.org/pdf/2606.18494 *)
 
-  (* This function calculates how many qubits need to be assigned to each actor. We assume that all actors have equal network capabilities here.
-  Note: This is not optimal and can be changed to reflect real-time network constraints. *)
-  Definition owners (n : nat) (actors : list Actor.t)
-      : list Actor.t :=
-    let m := List.length actors in
-    match m with
-    | O => []
-    | S _ =>
-        let k := Nat.div n m in
-        let r := Nat.modulo n m in
-        let small := Nat.sub m r in
-
-        List.app
-          (List.flat_map
-            (fun A => List.repeat A k)
-            (List.firstn small actors))
-          (List.flat_map
-            (fun A => List.repeat A (S k))
-            (List.skipn small actors))
-    end.
-
-  (* Generalized version of assigning qubits to each actor based on the inputs to the function *)
-  Fixpoint allocate (actors : list Actor.t) (bits : list bool)
+  (* Allocate all qubits belonging to a single actor. *)
+  Fixpoint allocate_n (A : Actor.t) (bits : list bool)
       : Qoreo (list Var.t) :=
-    match actors, bits with
-    | A :: actors', b :: bits' =>
+    match bits with
+    | [] => ret []
+    | b :: bits' =>
       do q ← A [- New (Bit b) -] ;;
-      do qs ← allocate actors' bits' ;;
+      do qs ← allocate_n A bits' ;;
       ret (q :: qs)
-    | _, _ => ret []
     end.
 
-  (* owner_of replaces A [- New(Bit b) -] with the name of the Actor defined in owners *)
-  Definition owner_of (q : Var.t) : Qoreo Actor.t :=
-    fun s =>
-      (s, match Var.Map.find q (Notation.vars s) with
-          | Some A => A
-          | None => ""
-          end).
+  (* Generalized version of assigning qubits to each actor based on the inputs to the function.
+     Every actor except the last receives num_qubits_per_actor qubits.
+     The last actor receives all remaining qubits.
+
+     Returns a list (Actor.t * list Var.t), mapping each actor
+     with the qubits it owns.
+  *)
+  Fixpoint allocate (num_qubits_per_actor : nat)
+      (actors : list Actor.t) (bits : list bool)
+      : Qoreo (list (Actor.t * list Var.t)) :=
+    match actors with
+    | [] => ret []
+    | [A] =>
+      do qs ← allocate_n A bits ;;
+      ret [(A, qs)] (*For the remaining r qubits, we assign them to the last actor*)
+    | A :: actors' =>
+      let abits := List.firstn num_qubits_per_actor bits in
+      let bits' := List.skipn num_qubits_per_actor bits in
+      do qs ← allocate_n A abits ;;
+      do rest ← allocate num_qubits_per_actor actors' bits' ;;
+      ret ((A, qs) :: rest)
+    end.
 
   (* Extra gates needed for general QFT *)
   Definition angle (d : nat) : QArith_base.Q :=
     QArith_base.Qmake 1%Z
       (Pos.of_nat (Nat.pow 2 d)).
 
+  (* Requires control and target to be owned by A.
+     Returns (control', target') where both remain owned by A.
+  *)
   Definition controlled_phase
       (A : Actor.t) (d : nat)
       (control target : Var.t)
@@ -78,7 +75,10 @@ Module DQFT.
       ret (control, target)
     end.
 
-  (* Apply several controlled phases with one control. *)
+  (* Apply several controlled phases with one control.
+     The control and all targets must be owned by the same actor.
+     Returns updated variables with their ownership preserved.
+  *)
   Fixpoint controlled_targets
       (A : Actor.t) (d : nat)
       (control : Var.t) (targets : list Var.t)
@@ -93,7 +93,14 @@ Module DQFT.
       ret (control, target :: rest)
     end.
 
-  (* Generalized correction algorithm as seen in the paper *)
+  (* Generalized correction algorithm as seen in the paper.
+     Requires q to be owned by Alice and all targets to be owned by Bob.
+
+     Returns (q', targets') where q' remains owned by Alice
+     and every target in targets' remains owned by Bob.
+
+     Uses one EPR pair for all remote controlled-phase gates in the packet.
+  *)
   Definition remote_packet
       (Alice Bob : Actor.t) (d : nat)
       (q : Var.t) (targets : list Var.t)
@@ -109,7 +116,10 @@ Module DQFT.
     do a1 ← Bob [-
       Expr.If m0_bob (Unitary X a1) a1 -] ;;
 
-    (* All targets share the same remote ancilla. *)
+    (* All targets share the same remote ancilla. 
+    E.g: The ancilla a1 that Bob owns is responsible for all the operations 
+    q0 would have done in the regular QFT case.
+    It then calls controlled_targets to apply CP for all the qubits in Bob's list. *)
     do (a1, targets) ←
       controlled_targets Bob d a1 targets ;;
 
@@ -122,106 +132,137 @@ Module DQFT.
 
     ret (q, targets).
 
-  (* Generalized QFT distribution. If Alice is executing a CP with a qubit that she owns,
-  No additional EPR requirement. If Alice executes a CP with Bob, we generate 1 EPR. The paper outlines that we only
-  to generate 1 ancilla. 
-  Recursively run this for Bob-Charlie operations and subsequently every other pair of actors. *)
-  Fixpoint run_targets
-      (fuel : nat)
-      (Alice : Actor.t)
-      (d : nat)
-      (q : Var.t)
-      (targets : list Var.t)
-      : Qoreo (Var.t * list Var.t) :=
 
-    match fuel, targets with
-    | O, _ => ret (q, targets)
-    | S _, [] => ret (q, [])
-    | S fuel', target :: rest =>
+  (* Recursively construct the QFT.
+     Each actor owns a list of qubits in logical QFT order.
 
-      do Bob ← owner_of target ;;
+     For each control qubit q:
+     - Apply a Hadamard gate on the actor A that owns q.
+     - Apply all controlled-phase gates with the remaining target qubits.
+     - Recursively repeat the process for the next control qubit.
 
-      if String.eqb Alice Bob then
+     The local helper apply_targets processes the remaining actor groups:
+     - If the targets are owned by A, execute their CP gates locally.
+     - If the targets belong to another actor B, call remote_packet
+       once to execute all their CP gates using one EPR pair.
+     - d is just the general denominator power for the angle used in CP(Pi/2^d). 
+       For e.g: For q0 on q2, d=2, We apply CP(Pi/4) .
 
-        (* Local controlled-phase gate *)
-        do (q, target) ←
-          controlled_phase Alice d q target ;;
+     Returns updated qubits paired with their original owners.
+     remaining_qubits provides one recursive step per control qubit.
+  *)
+  Fixpoint qft
+      (remaining_qubits : list bool)
+      (groups : list (Actor.t * list Var.t))
+      {struct remaining_qubits}
+      : Qoreo (list (Actor.t * Var.t)) :=
 
-        do (q, rest) ←
-          run_targets fuel' Alice (S d) q rest ;;
+    match remaining_qubits with
+    | [] => ret []
+    | _ :: remaining_qubits' =>
 
-        ret (q, target :: rest)
+      (*Actor has no qubits left to process. *)
+      match List.filter
+          (fun '(_, qs) =>
+            match qs with
+            | [] => false
+            | _ => true
+            end)
+          groups with
 
-      else
+      | (A, q :: qs) :: rest =>
 
-        (* Find the remaining targets on Bob. *)
-        do (same, later) ←
-          (fun s =>
-            (s, List.partition
-              (fun x =>
-                match Var.Map.find x (Notation.vars s) with
-                | Some A => String.eqb A Bob
-                | None => false
-                end)
-              rest)) ;;
+        (* Apply the remaining CP gates for the current control qubit. *)
+        let fix apply_targets
+            (d : nat)
+            (q : Var.t)
+            (targets : list (Actor.t * list Var.t))
+            {struct targets}
+            : Qoreo (Var.t * list (Actor.t * list Var.t)) :=
 
-        (* One EPR pair for all Bob's targets. *)
-        do (q, packed) ←
-          remote_packet Alice Bob d q (target :: same) ;;
+          match targets with
+          | [] => ret (q, [])
 
-        (* Continue with subsequent actors. *)
-        do (q, later) ←
-          run_targets fuel' Alice
-            (d + List.length packed) q later ;;
+          | (B, ts) :: later =>
+            match ts with
+            | [] =>
+              do (q, later) ←
+                apply_targets d q later ;;
+              ret (q, (B, []) :: later)
 
-        ret (q, List.app packed later)
+            | _ =>
+              if String.eqb A B then
+
+                (* Local controlled-phase gates *)
+                do (q, ts) ←
+                  controlled_targets A d q ts ;;
+
+                do (q, later) ←
+                  apply_targets (Nat.add d (List.length ts)) q later;;
+
+                ret (q, (B, ts) :: later)
+
+              else
+
+                (* Remote_packet takes a list of ALL qubits owned by an actor and only creates 1 EPR. *)
+                do (q, ts) ←
+                  remote_packet A B d q ts ;;
+
+                do (q, later) ←
+                  apply_targets (Nat.add d (List.length ts)) q later;;
+                ret (q, (B, ts) :: later)
+            end
+          end in
+
+        do q ← A [- Unitary H q -] ;;
+
+        do (q, targets) ←
+          apply_targets 1%nat q ((A, qs) :: rest);;
+
+        do later ←
+          qft remaining_qubits' targets ;;
+
+        ret ((A, q) :: later)
+
+      | _ => ret []
+      end
     end.
 
-  (* Recursively construct the QFT. *)
-  Fixpoint qft (fuel : nat) (qs : list Var.t)
-      : Qoreo (list Var.t) :=
-    match fuel, qs with
-    | O, _ => ret qs
-    | S _, [] => ret []
-    | S fuel', q :: rest =>
-
-      do A ← owner_of q ;;
-      do q ← A [- Unitary H q -] ;;
-
-      do (q, rest) ←
-        run_targets (List.length rest) A 1 q rest ;;
-
-      do rest ← qft fuel' rest ;;
-      ret (q :: rest)
-    end.
-
-  (* Measure output qubits. *)
-  Fixpoint measure_all (qs : list Var.t)
+  (* Measure output qubits.
+     Each pair (A, q) specifies the actor that owns and measures q.
+     Returns the measurement variables in logical qubit order.
+  *)
+  Fixpoint measure_all (qs : list (Actor.t * Var.t))
       : Qoreo (list Var.t) :=
     match qs with
     | [] => ret []
-    | q :: rest =>
-      do A ← owner_of q ;;
+    | (A, q) :: rest =>
       do bit ← A [- Meas q -] ;;
       do bits ← measure_all rest ;;
       ret (bit :: bits)
     end.
 
+
   Definition dqft
-      (n : nat)
       (actors : list Actor.t)
       (st : list bool)
       : Qoreo (list Var.t) :=
-    do qs ← allocate (owners n actors) st ;;
-    do qs ← qft n qs ;;
+    let num_qubits_per_actor :=
+      Nat.div (List.length st) (List.length actors) in
+
+    do groups ←
+      allocate num_qubits_per_actor actors st ;;
+
+    do qs ← qft st groups ;;
+
     measure_all qs.
 
   Definition parties : list Actor.t :=
-    ["alice"; "bob"].
+    ["alice"; "bob"; "charlie"].
 
   Definition apps : option (list AppFile.t) :=
     Notation.render_Qoreo NetSquid parties
-      (dqft 6 parties
+      (dqft parties
         [true; false; true; false; true; false]).
 
 End DQFT.
